@@ -1,4 +1,4 @@
-"""Vector storage and retrieval for donor/volunteer embeddings.
+"""Vector storage and retrieval for consumption data embeddings.
 
 Uses the existing my_embeddings table in Supabase with pgvector extension.
 """
@@ -28,10 +28,10 @@ class SimilarityResult:
     """Result from similarity search.
 
     Attributes:
-        id: The source_id of the matched form.
-        form_data: The original form data as a dictionary.
+        id: The source_id of the matched document.
+        form_data: The original data as a dictionary.
         score: Similarity score (higher is more similar).
-        form_type: Type of form ("donor" or "volunteer").
+        form_type: Type of document (e.g., "ocr", "consumption", "client").
         distance: Raw L2 distance from query.
     """
     id: str
@@ -41,14 +41,14 @@ class SimilarityResult:
     distance: float = 0.0
 
 
-class DonorVectorStore:
-    """Vector storage and retrieval for donor/volunteer embeddings.
+class VectorStore:
+    """Vector storage and retrieval for consumption data embeddings.
 
     Uses the existing my_embeddings table schema:
-    - source_id: form ID
-    - chunk_index: always 0 (single embedding per form)
-    - text_content: JSON serialized form data
-    - metadata: {"form_type": "donor"|"volunteer", ...}
+    - source_id: document ID
+    - chunk_index: always 0 (single embedding per document)
+    - text_content: JSON serialized data
+    - metadata: {"form_type": "ocr"|"consumption"|"client", ...}
     - embedding: VECTOR(1024)
 
     Attributes:
@@ -70,13 +70,13 @@ class DonorVectorStore:
         embedding: np.ndarray,
         form_data: Dict[str, Any]
     ) -> int:
-        """Store form embedding in my_embeddings table.
+        """Store document embedding in my_embeddings table.
 
         Args:
-            form_id: Unique identifier for the form.
-            form_type: Type of form ("donor" or "volunteer").
+            form_id: Unique identifier for the document.
+            form_type: Type of document (e.g., "ocr", "consumption", "client").
             embedding: The 1024-dimensional embedding vector.
-            form_data: Original form data to store.
+            form_data: Original data to store.
 
         Returns:
             The database ID of the inserted record.
@@ -205,16 +205,16 @@ class DonorVectorStore:
         country_filter: Optional[str] = None,
         exclude_ids: Optional[List[str]] = None
     ) -> List[SimilarityResult]:
-        """Find similar donors/volunteers using vector similarity.
+        """Find similar documents using vector similarity.
 
         Uses L2 distance (Euclidean) with IVFFlat index for efficient search.
 
         Args:
             query_embedding: The query embedding vector.
-            form_type: Optional filter for "donor" or "volunteer".
+            form_type: Optional filter for document type (e.g., "ocr", "consumption").
             limit: Maximum number of results to return.
             country_filter: Optional filter for country code.
-            exclude_ids: Optional list of form IDs to exclude.
+            exclude_ids: Optional list of document IDs to exclude.
 
         Returns:
             List of SimilarityResult ordered by similarity (highest first).
@@ -336,7 +336,7 @@ class DonorVectorStore:
         """Get count of embeddings by form type.
 
         Returns:
-            Dictionary with counts: {"donor": N, "volunteer": M, "total": N+M}
+            Dictionary with counts by type and total.
         """
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -349,7 +349,7 @@ class DonorVectorStore:
                 """)
                 rows = await cur.fetchall()
 
-        counts = {"donor": 0, "volunteer": 0, "total": 0}
+        counts = {"ocr": 0, "consumption": 0, "client": 0, "total": 0}
         for row in rows:
             form_type = row[0] or "unknown"
             count = row[1]
@@ -365,7 +365,7 @@ class DonorVectorStore:
         """Get all entries of a specific form type.
 
         Args:
-            form_type: Type of form ("donor", "volunteer", or "client").
+            form_type: Type of document (e.g., "ocr", "consumption", "client").
             limit: Maximum number of results to return.
 
         Returns:

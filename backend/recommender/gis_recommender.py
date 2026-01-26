@@ -1,10 +1,10 @@
 """
-GIS-based Donor/Client Recommender System for ASEAN targeting.
+GIS-based Client Recommender System for ASEAN targeting.
 
 This module implements:
 1. Lookalike Retrieval: Find top-K nearest neighbors using cosine similarity
 2. Spatial Filtering: Geo-fence filtering by Singapore planning areas
-3. Tiered Targeting: Ranking based on vector similarity, spatial proxy, and donation history
+3. Tiered Targeting: Ranking based on vector similarity and spatial proxy
 4. GeoJSON Export: Output for map-based dashboard visualization
 5. Dimensionality Reduction: PCA for compact semantic representation
 
@@ -336,7 +336,7 @@ PLANNING_AREAS = {
 
 @dataclass
 class ClientProfile:
-    """Client/Donor profile with spatial and behavioral data.
+    """Client profile with spatial and behavioral data.
 
     Privacy considerations:
     - user_id is a hashed identifier, not PII
@@ -361,12 +361,9 @@ class ClientProfile:
     causes: List[str]
     preferred_language: str
 
-    # Donation history
-    is_donor: bool = False
-    total_donated: float = 0.0
-    last_donation_amount: float = 0.0
-    last_org_donated: Optional[str] = None
-    donation_count: int = 0
+    # Consumption data
+    avg_consumption_kwh: float = 0.0
+    total_bills: int = 0
 
     # Metadata (not embedded)
     name_encrypted: Optional[str] = None  # Would be encrypted in production
@@ -386,8 +383,8 @@ class ClientProfile:
             f"Causes: {', '.join(self.causes)}",
             f"Language: {self.preferred_language}",
         ]
-        if self.is_donor:
-            parts.append(f"Donor with {self.donation_count} donations")
+        if self.avg_consumption_kwh > 0:
+            parts.append(f"Average consumption: {self.avg_consumption_kwh:.1f} kWh")
         return "\n".join(parts)
 
     def compute_reduced_embeddings(self, semantic_dims: int = 8) -> None:
@@ -420,11 +417,8 @@ class ClientProfile:
             "interests": self.interests,
             "causes": self.causes,
             "preferred_language": self.preferred_language,
-            "is_donor": self.is_donor,
-            "total_donated": self.total_donated,
-            "last_donation_amount": self.last_donation_amount,
-            "last_org_donated": self.last_org_donated,
-            "donation_count": self.donation_count,
+            "avg_consumption_kwh": self.avg_consumption_kwh,
+            "total_bills": self.total_bills,
             "age_range": self.age_range,
             "has_reduced_embedding": self.embedding_reduced is not None,
             "has_hybrid_embedding": self.hybrid_embedding is not None,
@@ -568,7 +562,7 @@ class GISRecommender:
         similarity may not work well due to sparse embeddings.
 
         Args:
-            seed_profile: The "ideal donor" profile to match against
+            seed_profile: The "ideal client" profile to match against
             candidates: List of candidate client profiles
             k: Number of neighbors to retrieve
             planning_area_filter: Optional geo-fence filter
@@ -653,7 +647,7 @@ class GISRecommender:
             ",".join(sorted(profile.interests)),
             ",".join(sorted(profile.causes)),
             profile.preferred_language,
-            str(profile.is_donor),
+            str(profile.avg_consumption_kwh),
         ]
         feature_str = "|".join(features)
 
@@ -682,136 +676,51 @@ class GISRecommender:
         """
         Convert form data from database to ClientProfile.
 
-        Handles both donor forms (from /donors/register) and client forms
-        (from /clients/register) which have different field structures.
-
-        Donor forms have: name, donor_type, country, preferred_language, causes,
-                         donation_frequency, amount_range, bio, motivation
-        Client forms have: coordinates, planning_area, housing_type, interests,
-                          causes, preferred_language, is_donor, etc.
-
-        For donors without GIS data, we infer reasonable defaults based on
-        available information.
+        Handles client forms which have GIS data and consumption information.
         """
         import random
 
-        # Check if this is a donor form (different structure)
-        is_donor_form = form_type == "donor" or "donor_type" in form_data
+        # Get country and infer planning area if not provided
+        country = form_data.get("country", "SG")
 
-        if is_donor_form:
-            # Convert donor form data to client profile
-            # Infer GIS data from available information
-
-            # Get country and infer planning area
-            country = form_data.get("country", "SG")
-
-            # Assign a random planning area (in production, could use IP geolocation)
+        # Check if coordinates are provided
+        if "coordinates" in form_data:
+            coordinates = tuple(form_data.get("coordinates", [1.3521, 103.8198]))
+            planning_area = form_data.get("planning_area", "central")
+        else:
+            # Assign a planning area based on user_id hash
             if country == "SG":
                 planning_areas = list(PLANNING_AREAS.keys())
-                # Use hash of user_id for deterministic assignment
                 area_idx = hash(user_id) % len(planning_areas)
                 planning_area = planning_areas[area_idx]
                 area_info = PLANNING_AREAS[planning_area]
-                # Add small random offset for privacy
                 random.seed(hash(user_id))
                 lat = area_info["lat"] + random.uniform(-0.003, 0.003)
                 lng = area_info["lng"] + random.uniform(-0.003, 0.003)
                 coordinates = (round(lat, 4), round(lng, 4))
             else:
-                # Non-SG donors - use central SG as placeholder
                 planning_area = "central"
                 coordinates = (1.2897, 103.8501)
 
-            # Infer housing type from amount_range (income proxy)
-            amount_range = form_data.get("amount_range", "")
-            if "5000" in amount_range or "10000" in amount_range:
-                housing_type = HousingType.LANDED
-            elif "2000" in amount_range or "3000" in amount_range:
-                housing_type = HousingType.CONDO
-            elif "1000" in amount_range:
-                housing_type = HousingType.HDB_EXECUTIVE
-            elif "500" in amount_range:
-                housing_type = HousingType.HDB_5_ROOM
-            elif "100" in amount_range or "200" in amount_range:
-                housing_type = HousingType.HDB_4_ROOM
-            else:
-                # Default based on donor_type
-                donor_type = form_data.get("donor_type", "individual")
-                if donor_type == "corporate":
-                    housing_type = HousingType.CONDO  # Proxy for corporate
-                elif donor_type == "foundation":
-                    housing_type = HousingType.LANDED  # High value
-                else:
-                    housing_type = HousingType.HDB_4_ROOM
+        # Get housing type
+        housing_type_str = form_data.get("housing_type", "hdb_4_room")
+        try:
+            housing_type = HousingType(housing_type_str)
+        except ValueError:
+            housing_type = HousingType.HDB_4_ROOM
 
-            # Get causes and infer interests from bio/motivation
-            causes = form_data.get("causes", [])
-
-            # Extract interests from bio and motivation text
-            bio = form_data.get("bio", "")
-            motivation = form_data.get("motivation", "")
-            combined_text = f"{bio} {motivation}".lower()
-
-            interest_keywords = {
-                "technology": ["tech", "software", "digital", "innovation", "startup"],
-                "sustainability": [
-                    "green",
-                    "sustainable",
-                    "climate",
-                    "environment",
-                    "eco",
-                ],
-                "finance": ["finance", "banking", "investment", "money", "economic"],
-                "healthcare": ["health", "medical", "hospital", "wellness", "care"],
-                "education": ["education", "school", "learning", "teach", "university"],
-                "community": [
-                    "community",
-                    "local",
-                    "neighborhood",
-                    "social",
-                    "volunteer",
-                ],
-                "arts": ["art", "culture", "music", "creative", "design"],
-            }
-
-            interests = []
-            for interest, keywords in interest_keywords.items():
-                if any(kw in combined_text for kw in keywords):
-                    interests.append(interest)
-
-            # Add causes as interests too (overlap is fine)
-            for cause in causes:
-                if cause not in interests:
-                    interests.append(cause)
-
-            return ClientProfile(
-                user_id=user_id,
-                coordinates=coordinates,
-                planning_area=planning_area,
-                housing_type=housing_type,
-                interests=interests[:5],  # Limit to 5
-                causes=causes,
-                preferred_language=form_data.get("preferred_language", "en"),
-                is_donor=True,  # Came from donor registration
-                total_donated=0,  # Unknown for new donors
-                donation_count=0,
-                age_range=None,
-            )
-        else:
-            # Client form - has GIS data directly
-            return ClientProfile(
-                user_id=user_id,
-                coordinates=tuple(form_data.get("coordinates", [1.3521, 103.8198])),
-                planning_area=form_data.get("planning_area", "central"),
-                housing_type=HousingType(form_data.get("housing_type", "hdb_4_room")),
-                interests=form_data.get("interests", []),
-                causes=form_data.get("causes", []),
-                preferred_language=form_data.get("preferred_language", "en"),
-                is_donor=form_data.get("is_donor", False),
-                total_donated=form_data.get("total_donated", 0),
-                donation_count=form_data.get("donation_count", 0),
-                age_range=form_data.get("age_range"),
-            )
+        return ClientProfile(
+            user_id=user_id,
+            coordinates=coordinates,
+            planning_area=planning_area,
+            housing_type=housing_type,
+            interests=form_data.get("interests", []),
+            causes=form_data.get("causes", []),
+            preferred_language=form_data.get("preferred_language", "en"),
+            avg_consumption_kwh=form_data.get("avg_consumption_kwh", 0.0),
+            total_bills=form_data.get("total_bills", 0),
+            age_range=form_data.get("age_range"),
+        )
 
     async def find_lookalikes(
         self,
@@ -823,10 +732,10 @@ class GISRecommender:
         fallback_candidates: Optional[List[ClientProfile]] = None,
     ) -> List[ScoredClient]:
         """
-        Find top-K lookalikes for a seed donor profile.
+        Find top-K lookalikes for a seed client profile.
 
         Args:
-            seed_profile: The "ideal donor" profile to match against
+            seed_profile: The \"ideal client\" profile to match against
             k: Number of neighbors to retrieve
             planning_area_filter: Optional geo-fence filter
             housing_type_filter: Optional housing type filter
@@ -864,21 +773,19 @@ class GISRecommender:
         seed_text = seed_profile.to_embedding_text()
         seed_embedding = await self.encoder.encode(seed_text)
 
-        # Query vector store - search for BOTH donors and clients
-        # Donors registered via /donors/register have form_type="donor"
-        # Clients registered via /clients/register have form_type="client"
+        # Query vector store - search for clients and consumption data
         all_results = []
 
-        # Search for donors first (main source of potential clients for donees)
-        donor_results = await self.vector_store.find_similar(
+        # Search for clients
+        client_results = await self.vector_store.find_similar(
             query_embedding=seed_embedding,
-            form_type="donor",
+            form_type="client",
             limit=k * 2,
             country_filter="SG",
         )
-        all_results.extend(donor_results)
+        all_results.extend(client_results)
 
-        # Also search for clients (if any registered via client endpoint)
+        # Also search for consumption data (if any registered)
         client_results = await self.vector_store.find_similar(
             query_embedding=seed_embedding,
             form_type="client",
@@ -912,7 +819,6 @@ class GISRecommender:
                     continue
 
             # Create client profile from form_data
-            # Handle both donor forms (different fields) and client forms
             client = self._form_data_to_client_profile(
                 result.id, form_data, result.form_type
             )
@@ -996,7 +902,7 @@ class GISRecommender:
                     "planning_area": sc.client.planning_area,
                     "housing_type": sc.client.housing_type.value,
                     "causes": sc.client.causes,
-                    "is_donor": sc.client.is_donor,
+                    "avg_consumption_kwh": sc.client.avg_consumption_kwh,
                     "final_score": round(sc.final_score, 3),
                     "vector_similarity": round(sc.vector_similarity_score, 3),
                     "spatial_proxy": round(sc.spatial_proxy_score, 3),
@@ -1151,8 +1057,8 @@ def generate_mock_clients(n: int = 100) -> List[ClientProfile]:
         interests = random.sample(interests_pool, random.randint(2, 5))
         causes = random.sample(causes_pool, random.randint(1, 4))
 
-        # Donor status (30% are donors)
-        is_donor = random.random() < 0.3
+        # Consumption data (random average kWh)
+        avg_consumption = random.uniform(100, 800)
 
         client = ClientProfile(
             user_id=generate_singapore_name(),
@@ -1162,9 +1068,8 @@ def generate_mock_clients(n: int = 100) -> List[ClientProfile]:
             interests=interests,
             causes=causes,
             preferred_language=random.choice(languages),
-            is_donor=is_donor,
-            total_donated=random.uniform(50, 5000) if is_donor else 0,
-            donation_count=random.randint(1, 20) if is_donor else 0,
+            avg_consumption_kwh=round(avg_consumption, 2),
+            total_bills=random.randint(1, 24),
             age_range=random.choice(age_ranges),
         )
 
@@ -1178,19 +1083,18 @@ def generate_mock_clients(n: int = 100) -> List[ClientProfile]:
     return clients
 
 
-def generate_seed_donor_profile(cause: str = "education") -> ClientProfile:
-    """Generate an ideal donor profile for lookalike search."""
+def generate_seed_profile(cause: str = "education") -> ClientProfile:
+    """Generate an ideal client profile for lookalike search."""
     profile = ClientProfile(
-        user_id="seed_donor",
+        user_id="seed_client",
         coordinates=(1.3048, 103.8318),  # Orchard area
         planning_area="orchard",
         housing_type=HousingType.CONDO,
         interests=["sustainability", "social_impact", "community"],
         causes=[cause, "children"],
         preferred_language="en",
-        is_donor=True,
-        total_donated=2500.0,
-        donation_count=12,
+        avg_consumption_kwh=350.0,
+        total_bills=12,
         age_range="35-44",
     )
 

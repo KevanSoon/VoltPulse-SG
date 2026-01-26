@@ -11,7 +11,7 @@ from agents.classifier import create_classifier
 from agents.logical import LogicalAgent
 from agents.agentic_rag import AgenticRAGAgent
 from encoders.sealion import SeaLionEncoder
-from recommender.vector_store import DonorVectorStore
+from recommender.vector_store import VectorStore
 
 
 def create_connection_string() -> str:
@@ -80,7 +80,7 @@ async def build_graph_with_memory():
         sealion_endpoint = os.getenv("SEALION_ENDPOINT")
         if sealion_endpoint:
             encoder = SeaLionEncoder(endpoint_url=sealion_endpoint)
-            vector_store = DonorVectorStore(pool)
+            vector_store = VectorStore(pool)
             print("[OK] Agentic RAG initialized with SeaLion encoder\n")
     except Exception as e:
         print(f"[WARN] Agentic RAG not available: {e}\n")

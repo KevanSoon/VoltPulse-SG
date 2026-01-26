@@ -17,7 +17,7 @@ from tools.rag_tools import RAG_TOOLS, set_rag_dependencies
 
 
 AGENTIC_RAG_SYSTEM_PROMPT = """You are an intelligent research agent with access to a vector database containing:
-1. Donor and volunteer profiles
+1. Client profiles with consumption data
 2. Utility bill documents (Singapore electricity bills processed via OCR)
 
 Your goal is to help users find relevant matches and extract consumption data autonomously.
@@ -25,12 +25,12 @@ Your goal is to help users find relevant matches and extract consumption data au
 ## Available Tools
 
 ### Profile Search Tools
-1. **list_available_categories** - Understand what data exists (countries, causes, types)
+1. **list_available_categories** - Understand what data exists (countries, providers, types)
 2. **get_statistics** - Get database size and composition
 3. **semantic_search** - Find profiles by natural language query
 4. **filter_by_metadata** - Browse by specific field values
 5. **hybrid_search** - Combine semantic search with filters
-6. **get_document_by_id** - Get full details of a specific profile
+6. **get_document_by_id** - Get full details of a specific document
 
 ### Consumption Data Tools (for Singapore electricity bills)
 7. **search_utility_bills** - Find stored electricity bills by query
@@ -113,7 +113,7 @@ class AgenticRAGAgent:
         Args:
             llm: Language model for reasoning and tool use
             encoder: SeaLion encoder for query embedding (can be set later)
-            vector_store: DonorVectorStore instance (can be set later)
+            vector_store: VectorStore instance (can be set later)
         """
         self.llm = llm
         self.tools = RAG_TOOLS
@@ -135,7 +135,7 @@ class AgenticRAGAgent:
 
         Args:
             encoder: The SeaLion encoder instance
-            vector_store: The DonorVectorStore instance
+            vector_store: The VectorStore instance
             llm: Optional LLM for consumption extraction tools
         """
         self.encoder = encoder
@@ -169,6 +169,8 @@ class AgenticRAGAgent:
         Returns:
             Dictionary with 'response' and 'tool_calls' keys
         """
+        print(f"\n[Agentic RAG] search() called with query: '{query}'")
+        
         messages = [
             SystemMessage(content=AGENTIC_RAG_SYSTEM_PROMPT),
             HumanMessage(content=query)
@@ -219,6 +221,12 @@ class AgenticRAGAgent:
         """
         last_message = state["messages"][-1]
         user_id = config["configurable"].get("user_id", "default_user")
+        
+        print(f"\n{'='*60}")
+        print(f"[Agentic RAG] __call__() invoked via LangGraph")
+        print(f"[Agentic RAG] User ID: {user_id}")
+        print(f"[Agentic RAG] Message: '{last_message.content}'")
+        print(f"{'='*60}")
 
         # Get memories for context
         memory_info = await self.retrieve_memories(store, user_id, str(last_message.content))
@@ -237,11 +245,23 @@ class AgenticRAGAgent:
         await self.store_message(store, user_id, last_message.content, "user")
 
         # Run the ReAct agent with tools
+        print(f"[Agentic RAG] Running ReAct agent with tools...")
         result = await self.react_agent.ainvoke({"messages": messages})
 
         # Extract the final response
         final_message = result["messages"][-1]
         response_content = final_message.content
+        
+        # Log tool calls made during execution
+        tool_calls_made = []
+        for msg in result["messages"]:
+            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    tool_calls_made.append(tc.get("name", "unknown"))
+        
+        print(f"[Agentic RAG] Tools called: {tool_calls_made if tool_calls_made else 'None'}")
+        print(f"[Agentic RAG] Response length: {len(response_content)} chars")
+        print(f"{'='*60}\n")
 
         # Store assistant response
         await self.store_message(store, user_id, response_content, "assistant")

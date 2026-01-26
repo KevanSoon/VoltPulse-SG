@@ -1,9 +1,9 @@
 """
-FastAPI endpoints for Ollama chat and donor/volunteer recommendation system.
+FastAPI endpoints for Ollama chat and consumption data management.
 
 Endpoints:
 - /chat: Chat with Ollama model using LangGraph with memory
-- /rag/search: Agentic RAG search (includes consumption data extraction)
+- /rag/search: Agentic RAG search for consumption data
 - /singpass/mock: Mock Singpass data
 - /ocr/process: Process images with OCR
 - /consumption/extract: Extract structured consumption data from OCR documents
@@ -90,7 +90,7 @@ async def init_services():
 
     try:
         from encoders.sealion import SeaLionEncoder
-        from recommender.vector_store import DonorVectorStore
+        from recommender.vector_store import VectorStore
         from psycopg_pool import AsyncConnectionPool
 
         # Initialize encoder (reads SEALION_ENDPOINT from env)
@@ -115,7 +115,7 @@ async def init_services():
                 kwargs={"autocommit": True, "prepare_threshold": None},
             )
             await pool.open()
-            vector_store = DonorVectorStore(pool)
+            vector_store = VectorStore(pool)
             print("[OK] Database connection pool initialized")
         else:
             print("[WARN] Database credentials not configured, vector store disabled")

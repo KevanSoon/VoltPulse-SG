@@ -1,5 +1,5 @@
 """Recommender system components."""
-from .vector_store import DonorVectorStore, SimilarityResult
+from .vector_store import VectorStore, SimilarityResult
 from .gis_recommender import (
     GISRecommender,
     ClientProfile,
@@ -8,13 +8,13 @@ from .gis_recommender import (
     PLANNING_AREAS,
     HOUSING_INCOME_PROXY,
     generate_mock_clients,
-    generate_seed_donor_profile,
+    generate_seed_profile,
     EmbeddingReducer,
     HybridSemanticSpatialEncoder,
 )
 
 __all__ = [
-    "DonorVectorStore",
+    "VectorStore",
     "SimilarityResult",
     "GISRecommender",
     "ClientProfile",
@@ -23,7 +23,7 @@ __all__ = [
     "PLANNING_AREAS",
     "HOUSING_INCOME_PROXY",
     "generate_mock_clients",
-    "generate_seed_donor_profile",
+    "generate_seed_profile",
     "EmbeddingReducer",
     "HybridSemanticSpatialEncoder",
 ]

@@ -29,7 +29,7 @@ def set_rag_dependencies(encoder, vector_store, llm=None):
 
     Args:
         encoder: The SeaLion encoder instance
-        vector_store: The DonorVectorStore instance
+        vector_store: The VectorStore instance
         llm: Optional LLM instance for consumption extraction
     """
     global _encoder, _vector_store, _llm, _consumption_extractor
@@ -48,7 +48,7 @@ def _format_results(results: List[Any], include_details: bool = True) -> str:
     
     Args:
         results: List of SimilarityResult objects
-        include_details: Whether to include full form data
+        include_details: Whether to include full data
         
     Returns:
         Formatted string representation of results
@@ -72,14 +72,13 @@ def _format_results(results: List[Any], include_details: bool = True) -> str:
             entry["country"] = form_data.get("country", "Unknown")
             entry["causes"] = form_data.get("causes", [])
             
-            # Include type-specific fields
-            if result.form_type == "donor":
-                entry["donor_type"] = form_data.get("donor_type", "Unknown")
-                entry["donation_frequency"] = form_data.get("donation_frequency")
-            elif result.form_type == "volunteer":
-                entry["volunteer_type"] = form_data.get("volunteer_type", "Unknown")
-                entry["skills"] = form_data.get("skills", [])
-                entry["availability"] = form_data.get("availability")
+            # Include type-specific fields for consumption data
+            if result.form_type == "ocr":
+                entry["original_filename"] = form_data.get("original_filename", "Unknown")
+                entry["text_count"] = form_data.get("text_count", 0)
+            elif result.form_type == "consumption":
+                entry["consumption_kwh"] = form_data.get("consumption_kwh")
+                entry["total_amount"] = form_data.get("total_amount")
         
         formatted.append(entry)
     
@@ -90,18 +89,18 @@ def _format_results(results: List[Any], include_details: bool = True) -> str:
 async def semantic_search(query: str, limit: int = 5, form_type: Optional[str] = None) -> str:
     """Search documents by semantic similarity.
 
-    Use this to find donors/volunteers whose profiles match a natural language query.
+    Use this to find documents whose content matches a natural language query.
     The search uses vector embeddings to find semantically similar entries.
 
     Args:
         query: Natural language description of what you're looking for.
-               Examples: "corporate donors interested in education",
-                        "volunteers with tech skills in Singapore"
+               Examples: "electricity bills from January",
+                        "high consumption months"
         limit: Maximum number of results to return (default: 5, max: 20)
-        form_type: Optional filter - "donor" or "volunteer"
+        form_type: Optional filter - "ocr", "consumption", or "client"
 
     Returns:
-        JSON formatted list of matching profiles with similarity scores
+        JSON formatted list of matching documents with similarity scores
     """
     print(f"[Agentic RAG] semantic_search called - query: '{query}', limit: {limit}, form_type: {form_type}")
     if _encoder is None or _vector_store is None:
@@ -136,10 +135,9 @@ async def filter_by_metadata(
 
     Args:
         field: The metadata field to filter on.
-               Valid fields: "form_type", "donor_type", "volunteer_type",
-                           "country", "availability"
+               Valid fields: "form_type", "country", "provider_name"
         value: The value to match.
-               Examples: form_type="donor", country="SG", donor_type="corporate"
+               Examples: form_type="ocr", country="SG"
         limit: Maximum number of results (default: 10)
 
     Returns:
@@ -199,7 +197,7 @@ async def get_document_by_id(doc_id: str) -> str:
     and want to see the complete profile details.
 
     Args:
-        doc_id: The unique document/form ID (e.g., "donor_12345")
+        doc_id: The unique document ID (e.g., "ocr_12345")
 
     Returns:
         Complete JSON representation of the document
@@ -232,11 +230,9 @@ async def list_available_categories() -> str:
 
     Use this first to understand what categories exist in the database
     before performing filtered searches. Returns available:
-    - Form types (donor, volunteer)
+    - Form types (ocr, consumption, client)
     - Countries (ASEAN country codes)
-    - Causes (education, health, etc.)
-    - Donor types (individual, corporate, foundation)
-    - Volunteer types (regular, event_based, skilled)
+    - Providers (electricity retailers)
 
     Returns:
         JSON object with distinct values for each category
@@ -266,21 +262,13 @@ async def list_available_categories() -> str:
                 """)
                 countries = [row[0] for row in await cur.fetchall() if row[0]]
                 
-                # Get distinct donor types
+                # Get distinct provider names (for electricity bills)
                 await cur.execute("""
-                    SELECT DISTINCT text_content::json->>'donor_type' as dtype
+                    SELECT DISTINCT text_content::json->>'provider_name' as provider
                     FROM my_embeddings
-                    WHERE text_content::json->>'donor_type' IS NOT NULL
+                    WHERE text_content::json->>'provider_name' IS NOT NULL
                 """)
-                donor_types = [row[0] for row in await cur.fetchall() if row[0]]
-                
-                # Get distinct volunteer types
-                await cur.execute("""
-                    SELECT DISTINCT text_content::json->>'volunteer_type' as vtype
-                    FROM my_embeddings
-                    WHERE text_content::json->>'volunteer_type' IS NOT NULL
-                """)
-                volunteer_types = [row[0] for row in await cur.fetchall() if row[0]]
+                providers = [row[0] for row in await cur.fetchall() if row[0]]
                 
                 # Get all causes (need to aggregate from arrays)
                 await cur.execute("""
@@ -307,8 +295,7 @@ async def list_available_categories() -> str:
         categories = {
             "form_types": form_types,
             "countries": sorted(countries),
-            "donor_types": sorted(donor_types),
-            "volunteer_types": sorted(volunteer_types),
+            "providers": sorted(providers),
             "causes": sorted(all_causes),
             "total_records": sum(form_types.values()) if form_types else 0
         }
@@ -335,8 +322,8 @@ async def hybrid_search(
     Args:
         query: Natural language query for semantic matching
         country: Optional country code filter (e.g., "SG", "MY", "TH")
-        form_type: Optional form type filter ("donor" or "volunteer")
-        causes: Optional list of cause categories to match
+        form_type: Optional form type filter ("ocr", "consumption", or "client")
+        causes: Optional list of categories to match
         limit: Maximum number of results (default: 10)
 
     Returns:

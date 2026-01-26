@@ -1,6 +1,6 @@
-"""SeaLion encoder for ASEAN multilingual form analysis.
+"""SeaLion encoder for ASEAN multilingual content analysis.
 
-Uses SeaLion chat API to analyze donor/volunteer forms and extract
+Uses SeaLion chat API to analyze content and extract
 structured features for embedding generation. SeaLion is chosen for its
 knowledge of ASEAN nations and multilingual capabilities.
 
@@ -33,16 +33,15 @@ LANGUAGES = ["en", "ms", "th", "vi", "id", "tl", "my", "km", "lo", "zh"]
 
 AVAILABILITY_TYPES = ["weekends", "evenings", "flexible", "full_time", "event_based"]
 
-DONOR_TYPES = ["individual", "corporate", "foundation"]
-
-VOLUNTEER_TYPES = ["regular", "event_based", "skilled"]
+# Consumption profile types
+CONSUMPTION_PROFILES = ["low", "medium", "high", "very_high"]
 
 
 class SeaLionEncoder(BaseEncoder):
-    """SeaLion encoder using chat API for form analysis.
+    """SeaLion encoder using chat API for content analysis.
 
     Uses SeaLion's ASEAN knowledge and multilingual capabilities to:
-    1. Analyze form content semantically
+    1. Analyze content semantically
     2. Extract structured features
     3. Generate embeddings suitable for similarity matching
 
@@ -83,27 +82,27 @@ class SeaLionEncoder(BaseEncoder):
 
     def _build_system_prompt(self) -> str:
         """Build system prompt for SeaLion analysis."""
-        return """You are an ASEAN donor/volunteer profile analyzer. Your task is to analyze form data and extract structured features for matching.
+        return """You are an ASEAN content and consumption data analyzer. Your task is to analyze content and extract structured features for matching.
 
-Analyze the provided form and respond with a JSON object containing these fields:
+Analyze the provided content and respond with a JSON object containing these fields:
 
-1. "causes": List of relevant cause categories from: education, health, environment, poverty, children, elderly, disability, animals, arts, sports, disaster_relief, human_rights, technology, agriculture, housing
+1. "causes": List of relevant categories from: education, health, environment, poverty, children, elderly, disability, animals, arts, sports, disaster_relief, human_rights, technology, agriculture, housing
 
 2. "cause_scores": Object with scores (0.0-1.0) for each relevant cause based on text sentiment and context
 
-3. "engagement_level": Score from 0.0 to 1.0 indicating commitment level (based on frequency, bio, motivation)
+3. "engagement_level": Score from 0.0 to 1.0 indicating activity level
 
 4. "experience_level": Score from 0.0 to 1.0 indicating prior experience
 
-5. "financial_capacity": Score from 0.0 to 1.0 for donors (based on amount range, donor type)
+5. "consumption_level": Score from 0.0 to 1.0 indicating consumption intensity
 
-6. "skills_diversity": Score from 0.0 to 1.0 for volunteers (based on skills listed)
+6. "efficiency_score": Score from 0.0 to 1.0 indicating efficiency (based on consumption patterns)
 
-7. "language_diversity": Score from 0.0 to 1.0 based on languages spoken
+7. "language_diversity": Score from 0.0 to 1.0 based on languages mentioned
 
-8. "motivation_themes": List of key themes extracted from bio/motivation/goals text
+8. "motivation_themes": List of key themes extracted from text content
 
-9. "regional_focus": Score from 0.0 to 1.0 indicating focus on ASEAN vs global causes
+9. "regional_focus": Score from 0.0 to 1.0 indicating focus on ASEAN vs global context
 
 Respond ONLY with valid JSON, no explanation."""
 
@@ -307,17 +306,14 @@ Respond ONLY with valid JSON, no explanation."""
         # Section 6 (indices 548-557): Continuous scores
         embedding[548] = features.get("engagement_level", 0.5)
         embedding[549] = features.get("experience_level", 0.5)
-        embedding[550] = features.get("financial_capacity", 0.5)
-        embedding[551] = features.get("skills_diversity", 0.5)
+        embedding[550] = features.get("consumption_level", 0.5)
+        embedding[551] = features.get("efficiency_score", 0.5)
         embedding[552] = features.get("language_diversity", 0.5)
         embedding[553] = features.get("regional_focus", 0.5)
 
-        # Section 7 (indices 558-600): Donor/volunteer type encoding
+        # Section 7 (indices 558-600): Profile type encoding
         embedding += self._encode_categorical(
-            form_text, DONOR_TYPES, 558
-        )
-        embedding += self._encode_categorical(
-            form_text, VOLUNTEER_TYPES, 563
+            form_text, CONSUMPTION_PROFILES, 558
         )
         embedding += self._encode_categorical(
             form_text, AVAILABILITY_TYPES, 568
@@ -337,22 +333,22 @@ Respond ONLY with valid JSON, no explanation."""
         return embedding
 
     async def encode(self, text: str) -> np.ndarray:
-        """Encode form text using SeaLion analysis.
+        """Encode text using SeaLion analysis.
 
         Process:
-        1. Send form text to SeaLion for semantic analysis
+        1. Send text to SeaLion for semantic analysis
         2. Parse extracted features from response
         3. Build embedding from features + text hashing
 
         Args:
-            text: The form text to encode.
+            text: The text content to encode.
 
         Returns:
             A numpy array of shape (1024,).
         """
         # Get SeaLion analysis
         response = await self._call_sealion(
-            f"Analyze this donor/volunteer form:\n\n{text}"
+            f"Analyze this content:\n\n{text}"
         )
         features = self._parse_sealion_response(response)
 
@@ -360,13 +356,13 @@ Respond ONLY with valid JSON, no explanation."""
         return self._build_embedding_from_features(text, features)
 
     async def encode_batch(self, texts: List[str]) -> np.ndarray:
-        """Encode multiple form texts.
+        """Encode multiple texts.
 
         Note: This makes sequential API calls since the SeaLion API
         doesn't support batch requests.
 
         Args:
-            texts: List of form texts to encode.
+            texts: List of texts to encode.
 
         Returns:
             A numpy array of shape (len(texts), 1024).

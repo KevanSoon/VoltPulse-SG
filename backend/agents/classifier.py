@@ -6,7 +6,7 @@ from langchain_core.runnables import RunnableConfig
 
 class MessageClassifier(BaseModel):
     """Classification result for routing messages."""
-    message_type: Literal["logical", "donor_search", "volunteer_search", "consumption_query"] = Field(
+    message_type: Literal["logical", "consumption_query"] = Field(
         ...,
         description="Classify message for routing to appropriate agent."
     )
@@ -25,6 +25,8 @@ async def classify_message(state: dict, config: RunnableConfig, *, store: BaseSt
         Dict with message_type for routing
     """
     last_message = state["messages"][-1]
+    print(f"\n[Classifier] Classifying message: '{last_message.content[:100]}...'" if len(str(last_message.content)) > 100 else f"\n[Classifier] Classifying message: '{last_message.content}'")
+    
     classifier_llm = llm.with_structured_output(MessageClassifier)
 
     result = classifier_llm.invoke([
@@ -37,8 +39,6 @@ Respond ONLY with valid JSON in this exact format:
 
 Where TYPE is one of:
 - 'consumption_query': Questions about utility bills, electricity usage, kWh consumption, energy costs, billing periods, comparing bills
-- 'donor_search': Looking for donors in the database, finding people who donate, matching donors by criteria
-- 'volunteer_search': Looking for volunteers in the database, finding people who volunteer, matching volunteers
 - 'logical': Facts, information, logical analysis, practical solutions (default for general queries)
 
 Examples:
@@ -47,16 +47,16 @@ Examples:
 - "How much kWh did I use last month?" → consumption_query
 - "Compare my energy bills" → consumption_query
 - "How much did I pay for electricity?" → consumption_query
-- "Find donors interested in education in Singapore" → donor_search
-- "Show me volunteers with tech skills" → volunteer_search
 - "What is the capital of France?" → logical
-- "Help me find charities" → logical"""
+- "Tell me about energy saving tips" → logical"""
         },
         {
             "role": "user",
             "content": last_message.content
         }
     ])
+    
+    print(f"[Classifier] Routed to: '{result.message_type}' → {'Agentic RAG' if result.message_type == 'consumption_query' else 'Logical Agent'}")
     return {"message_type": result.message_type}
 
 
