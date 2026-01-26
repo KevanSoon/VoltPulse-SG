@@ -22,10 +22,12 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 if APP_DIR not in sys.path:
     sys.path.insert(0, APP_DIR)
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+import tempfile
+import uuid
 
 # Windows-specific fix for psycopg async compatibility
 if sys.platform == "win32":
@@ -204,6 +206,20 @@ class StatsResponse(BaseModel):
     donor: int
     volunteer: int
     total: int
+
+
+class OCRResult(BaseModel):
+    """Single OCR detection result."""
+    text: str
+    box: List[List[float]]
+
+
+class OCRResponse(BaseModel):
+    """Response from OCR processing."""
+    ocr_results: Dict[str, OCRResult]
+    extracted_texts: List[str]
+    embedding_stored: bool
+    source_id: str
 
 
 # ============================================================================
@@ -1801,6 +1817,161 @@ async def debug_search_donors(cause: str = "education", limit: int = 10):
         import traceback
 
         return {"error": str(e), "traceback": traceback.format_exc()}
+
+
+# ============================================================================
+# OCR Endpoints
+# ============================================================================
+
+@app.post("/ocr/process", response_model=OCRResponse)
+async def process_ocr(file: UploadFile = File(...)):
+    """
+    Process an uploaded image using PaddleOCR via Gradio client.
+
+    1. Receives uploaded image file
+    2. Saves temporarily and sends to PaddleOCR Gradio Space
+    3. Extracts text from OCR results
+    4. Generates embedding using SeaLion encoder
+    5. Stores embedding in Supabase vector database
+
+    Returns OCR results and extracted text for embedding.
+    """
+    if not encoder:
+        raise HTTPException(status_code=503, detail="Encoder not initialized")
+    if not vector_store:
+        raise HTTPException(status_code=503, detail="Database not connected")
+
+    # Validate file type
+    allowed_types = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/bmp", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type: {file.content_type}. Allowed: {allowed_types}"
+        )
+
+    temp_file_path = None
+    try:
+        # Save uploaded file to temp location
+        suffix = os.path.splitext(file.filename)[1] if file.filename else ".png"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+
+        # Call PaddleOCR via Gradio client
+        from gradio_client import Client, handle_file
+
+        client = Client("kevansoon/PaddleOCR")
+        result = client.predict(
+            img=handle_file(temp_file_path),
+            lang="en",
+            api_name="/predict"
+        )
+
+        # Parse OCR results - result is typically a list of [box, text, confidence]
+        ocr_results = {}
+        extracted_texts = []
+
+        if isinstance(result, list):
+            for idx, item in enumerate(result):
+                if isinstance(item, (list, tuple)) and len(item) >= 2:
+                    # Format: [box_coords, text, confidence]
+                    box = item[0] if len(item) > 0 else []
+                    text = str(item[1]) if len(item) > 1 else ""
+
+                    if text.strip():
+                        ocr_results[str(idx)] = OCRResult(
+                            text=text,
+                            box=box if isinstance(box, list) else []
+                        )
+                        extracted_texts.append(text)
+                elif isinstance(item, dict):
+                    # Alternative dict format
+                    text = item.get("text", item.get("label", ""))
+                    box = item.get("box", item.get("bbox", []))
+
+                    if text.strip():
+                        ocr_results[str(idx)] = OCRResult(
+                            text=text,
+                            box=box if isinstance(box, list) else []
+                        )
+                        extracted_texts.append(text)
+
+        # Clean up extracted texts - only keep actual words/phrases
+        cleaned_texts = []
+        for text in extracted_texts:
+            # Filter out very short strings or purely numeric strings that aren't meaningful
+            cleaned = text.strip()
+            if len(cleaned) > 0:
+                cleaned_texts.append(cleaned)
+
+        # Generate unique source ID for this OCR result
+        source_id = f"ocr_{uuid.uuid4().hex[:12]}"
+
+        # Combine extracted texts for embedding
+        combined_text = " ".join(cleaned_texts)
+
+        embedding_stored = False
+        if combined_text.strip():
+            # Generate embedding using SeaLion encoder
+            embedding = await encoder.encode(combined_text)
+
+            # Store in vector database
+            form_data = {
+                "source_type": "ocr",
+                "original_filename": file.filename,
+                "extracted_texts": cleaned_texts,
+                "text_count": len(cleaned_texts),
+                "combined_text": combined_text
+            }
+
+            await vector_store.store_embedding(
+                form_id=source_id,
+                form_type="ocr",
+                embedding=embedding,
+                form_data=form_data
+            )
+            embedding_stored = True
+            print(f"[OK] OCR embedding stored: {source_id} with {len(cleaned_texts)} text items")
+
+        return OCRResponse(
+            ocr_results=ocr_results,
+            extracted_texts=cleaned_texts,
+            embedding_stored=embedding_stored,
+            source_id=source_id
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        # Clean up temp file
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+
+
+@app.get("/ocr/results/{source_id}")
+async def get_ocr_result(source_id: str):
+    """
+    Retrieve a stored OCR result by its source ID.
+    """
+    if not vector_store:
+        raise HTTPException(status_code=503, detail="Database not connected")
+
+    result = await vector_store.get_embedding(source_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"OCR result {source_id} not found")
+
+    return {
+        "id": result.id,
+        "form_type": result.form_type,
+        "form_data": result.form_data
+    }
 
 
 # ============================================================================

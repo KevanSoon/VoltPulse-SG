@@ -19,3 +19,7 @@ numpy>=1.24.0
 
 # OpenAI (for charity web search tools)
 openai>=1.0.0
+
+# OCR processing
+gradio_client>=1.0.0
+python-multipart>=0.0.6
