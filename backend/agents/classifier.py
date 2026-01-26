@@ -1,0 +1,71 @@
+from typing import Literal
+from pydantic import BaseModel, Field
+from langgraph.store.base import BaseStore
+from langchain_core.runnables import RunnableConfig
+
+
+class MessageClassifier(BaseModel):
+    """Classification result for routing messages."""
+    message_type: Literal["emotional", "logical", "charity_search", "donor_search", "volunteer_search"] = Field(
+        ...,
+        description="Classify message for routing to appropriate agent."
+    )
+
+
+async def classify_message(state: dict, config: RunnableConfig, *, store: BaseStore, llm) -> dict:
+    """Classify user message to route to appropriate agent.
+
+    Args:
+        state: Graph state containing messages
+        config: Runtime config with user_id, thread_id
+        store: Memory store (required by graph but not used here)
+        llm: Language model instance
+
+    Returns:
+        Dict with message_type for routing
+    """
+    last_message = state["messages"][-1]
+    classifier_llm = llm.with_structured_output(MessageClassifier)
+
+    result = classifier_llm.invoke([
+        {
+            "role": "system",
+            "content": """Classify the user message into one of these categories:
+
+Respond ONLY with valid JSON in this exact format:
+{"message_type": "TYPE"}
+
+Where TYPE is one of:
+- 'emotional': Message requires emotional support, therapy, deals with feelings, or personal problems
+- 'donor_search': Looking for donors in the database, finding people who donate, matching donors by criteria
+- 'volunteer_search': Looking for volunteers in the database, finding people who volunteer, matching volunteers
+- 'charity_search': Asking about charity organizations, nonprofits, wanting to research specific charities
+- 'logical': Facts, information, logical analysis, practical solutions (default for general queries)
+
+Examples:
+- "Find donors interested in education in Singapore" → donor_search
+- "Show me volunteers with tech skills" → volunteer_search  
+- "Tell me about Red Cross charity" → charity_search
+- "I'm feeling sad today" → emotional
+- "What is the capital of France?" → logical"""
+        },
+        {
+            "role": "user",
+            "content": last_message.content
+        }
+    ])
+    return {"message_type": result.message_type}
+
+
+def create_classifier(llm):
+    """Factory to create classifier function with LLM bound.
+
+    Usage:
+        llm = ChatOllama(model="gpt-oss:120b-cloud")
+        classify = create_classifier(llm)
+        graph_builder.add_node("classifier", classify)
+    """
+    async def classifier_node(state: dict, config: RunnableConfig, *, store: BaseStore):
+        return await classify_message(state, config, store=store, llm=llm)
+
+    return classifier_node

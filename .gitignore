@@ -1,0 +1,29 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.python-version
+.env
+
+# Lock files (regenerated on install)
+uv.lock
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test/dev files (optional - remove if you want to keep)
+test.ipynb
