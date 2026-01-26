@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
+import Chatbot from "./components/Chatbot";
 
 interface OCRResult {
   text: string;
@@ -249,6 +250,9 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Chatbot */}
+      <Chatbot />
     </main>
   );
 }
