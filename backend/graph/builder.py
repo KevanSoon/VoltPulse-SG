@@ -7,10 +7,8 @@ from langchain_ollama import ChatOllama
 
 from .state import State
 from .router import router
-from agents.therapist import TherapistAgent
-from agents.logical import LogicalAgent
 from agents.classifier import create_classifier
-from agents.charity_search import CharitySearchAgent
+from agents.logical import LogicalAgent
 from agents.agentic_rag import AgenticRAGAgent
 from encoders.sealion import SeaLionEncoder
 from recommender.vector_store import DonorVectorStore
@@ -93,9 +91,7 @@ async def build_graph_with_memory():
     # Build the graph
     graph_builder = StateGraph(State)
     graph_builder.add_node("classifier", create_classifier(llm))
-    graph_builder.add_node("therapist", TherapistAgent(llm))
     graph_builder.add_node("logical", LogicalAgent(llm))
-    graph_builder.add_node("charity_search", CharitySearchAgent(llm))
     graph_builder.add_node("agentic_rag", agentic_rag_agent)
 
     graph_builder.add_edge(START, "classifier")
@@ -103,15 +99,11 @@ async def build_graph_with_memory():
         "classifier",
         router,
         {
-            "therapist": "therapist",
             "logical": "logical",
-            "charity_search": "charity_search",
             "agentic_rag": "agentic_rag"
         }
     )
-    graph_builder.add_edge("therapist", END)
     graph_builder.add_edge("logical", END)
-    graph_builder.add_edge("charity_search", END)
     graph_builder.add_edge("agentic_rag", END)
 
     # Compile with store and checkpointer

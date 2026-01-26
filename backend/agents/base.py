@@ -8,7 +8,7 @@ from langchain_core.runnables import RunnableConfig
 class BaseMemoryAgent(ABC):
     """Base class for agents with memory capabilities.
 
-    Extracts shared logic from therapist_agent and logical_agent:
+    Provides shared logic for agents:
     - Memory retrieval from store
     - Automatic storage of all conversations (user + assistant messages)
     - Message construction with system prompt + memories

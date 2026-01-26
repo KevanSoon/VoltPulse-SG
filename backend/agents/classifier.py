@@ -6,7 +6,7 @@ from langchain_core.runnables import RunnableConfig
 
 class MessageClassifier(BaseModel):
     """Classification result for routing messages."""
-    message_type: Literal["emotional", "logical", "charity_search", "donor_search", "volunteer_search"] = Field(
+    message_type: Literal["logical", "donor_search", "volunteer_search"] = Field(
         ...,
         description="Classify message for routing to appropriate agent."
     )
@@ -36,18 +36,15 @@ Respond ONLY with valid JSON in this exact format:
 {"message_type": "TYPE"}
 
 Where TYPE is one of:
-- 'emotional': Message requires emotional support, therapy, deals with feelings, or personal problems
 - 'donor_search': Looking for donors in the database, finding people who donate, matching donors by criteria
 - 'volunteer_search': Looking for volunteers in the database, finding people who volunteer, matching volunteers
-- 'charity_search': Asking about charity organizations, nonprofits, wanting to research specific charities
 - 'logical': Facts, information, logical analysis, practical solutions (default for general queries)
 
 Examples:
 - "Find donors interested in education in Singapore" → donor_search
-- "Show me volunteers with tech skills" → volunteer_search  
-- "Tell me about Red Cross charity" → charity_search
-- "I'm feeling sad today" → emotional
-- "What is the capital of France?" → logical"""
+- "Show me volunteers with tech skills" → volunteer_search
+- "What is the capital of France?" → logical
+- "Help me find charities" → logical"""
         },
         {
             "role": "user",
