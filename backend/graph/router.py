@@ -8,4 +8,6 @@ def router(state: State):
         return "agentic_rag"
     elif message_type == "volunteer_search":
         return "agentic_rag"
+    elif message_type == "consumption_query":
+        return "agentic_rag"
     return "logical"

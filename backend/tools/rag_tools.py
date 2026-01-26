@@ -6,6 +6,8 @@ This module provides tools that allow an agent to autonomously:
 3. Retrieve specific documents
 4. List available categories
 5. Perform hybrid search with filters
+6. Extract consumption data from utility bills (on-demand)
+7. Search and compare utility bills
 
 The agent uses a ReAct loop to iteratively explore and refine its search.
 """
@@ -18,18 +20,27 @@ from functools import wraps
 # Global references to be set at initialization
 _encoder = None
 _vector_store = None
+_llm = None
+_consumption_extractor = None
 
 
-def set_rag_dependencies(encoder, vector_store):
+def set_rag_dependencies(encoder, vector_store, llm=None):
     """Set the encoder and vector store instances for RAG tools.
-    
+
     Args:
         encoder: The SeaLion encoder instance
         vector_store: The DonorVectorStore instance
+        llm: Optional LLM instance for consumption extraction
     """
-    global _encoder, _vector_store
+    global _encoder, _vector_store, _llm, _consumption_extractor
     _encoder = encoder
     _vector_store = vector_store
+    _llm = llm
+
+    # Initialize consumption extractor if LLM is provided
+    if llm:
+        from services.consumption_extractor import ConsumptionExtractor
+        _consumption_extractor = ConsumptionExtractor(llm)
 
 
 def _format_results(results: List[Any], include_details: bool = True) -> str:
@@ -395,12 +406,267 @@ async def get_statistics() -> str:
         return f"Error getting statistics: {str(e)}"
 
 
+# =============================================================================
+# CONSUMPTION DATA TOOLS - For Singapore electricity bill extraction
+# =============================================================================
+
+@tool
+async def extract_consumption_data(source_id: str) -> str:
+    """Extract structured consumption data from a utility bill stored in the vector store.
+
+    Use this to get detailed electricity usage information from a bill that was
+    previously uploaded via OCR. Extracts kWh consumption, costs, billing period,
+    tariff breakdown, and provider information.
+
+    This tool is specifically designed for Singapore electricity bills from
+    providers like SP Services, Geneco, Keppel, Senoko, Tuas Power, etc.
+
+    Args:
+        source_id: The unique ID of the OCR document (e.g., "ocr_abc123")
+
+    Returns:
+        JSON with structured consumption data including:
+        - consumption_kwh: Total electricity consumed
+        - total_amount: Bill amount in SGD
+        - billing_period_start/end: Billing dates
+        - provider_name: Electricity retailer
+        - tariff_tiers: Breakdown by usage tier
+        - extraction_confidence: Quality score (0-1)
+    """
+    print(f"[Consumption] extract_consumption_data called - source_id: '{source_id}'")
+
+    if _vector_store is None:
+        return "Error: Vector store not initialized."
+    if _consumption_extractor is None:
+        return "Error: Consumption extractor not initialized. LLM required."
+
+    try:
+        # Retrieve the OCR document
+        result = await _vector_store.get_embedding(source_id)
+
+        if result is None:
+            return f"Document with ID '{source_id}' not found."
+
+        # Check if it's an OCR document
+        form_data = result.form_data
+        if form_data.get("source_type") != "ocr":
+            return f"Document '{source_id}' is not an OCR result (type: {result.form_type})"
+
+        # Get the combined OCR text
+        ocr_text = form_data.get("combined_text", "")
+        if not ocr_text:
+            return f"No OCR text found in document '{source_id}'"
+
+        # Extract consumption data using LLM
+        extraction = await _consumption_extractor.extract_with_retry(ocr_text)
+
+        # Format result
+        extraction_dict = extraction.model_dump(exclude={"raw_ocr_text"})
+        extraction_dict["source_id"] = source_id
+        extraction_dict["original_filename"] = form_data.get("original_filename", "unknown")
+
+        return json.dumps(extraction_dict, indent=2, default=str)
+
+    except Exception as e:
+        return f"Extraction error: {str(e)}"
+
+
+@tool
+async def search_utility_bills(query: str, limit: int = 10) -> str:
+    """Search stored utility bills by semantic query.
+
+    Use this to find electricity bills matching a natural language description.
+    For example: "latest bill", "highest consumption", "bills from January".
+
+    This searches OCR documents in the vector store and returns matching bills
+    with basic metadata. Use extract_consumption_data to get full details.
+
+    Args:
+        query: Natural language search query
+               Examples: "recent electricity bills", "high consumption months",
+                        "bills from SP Services"
+        limit: Maximum number of results (default: 10)
+
+    Returns:
+        JSON list of matching utility bills with:
+        - source_id: Document ID for use with extract_consumption_data
+        - original_filename: Uploaded file name
+        - text_preview: First 200 chars of OCR text
+        - similarity_score: Relevance to query
+    """
+    print(f"[Consumption] search_utility_bills called - query: '{query}', limit: {limit}")
+
+    if _encoder is None or _vector_store is None:
+        return "Error: RAG tools not initialized."
+
+    try:
+        # Encode the query
+        embedding = await _encoder.encode(query)
+
+        # Search for OCR documents specifically
+        results = await _vector_store.find_similar(
+            query_embedding=embedding,
+            form_type="ocr",
+            limit=min(limit, 20)
+        )
+
+        if not results:
+            return "No utility bills found matching the query."
+
+        # Format results with OCR-specific fields
+        formatted = []
+        for i, result in enumerate(results, 1):
+            form_data = result.form_data or {}
+            combined_text = form_data.get("combined_text", "")
+
+            entry = {
+                "rank": i,
+                "source_id": result.id,
+                "original_filename": form_data.get("original_filename", "unknown"),
+                "text_preview": combined_text[:200] + "..." if len(combined_text) > 200 else combined_text,
+                "text_count": form_data.get("text_count", 0),
+                "similarity_score": round(result.score, 4),
+            }
+            formatted.append(entry)
+
+        return json.dumps(formatted, indent=2, default=str)
+
+    except Exception as e:
+        return f"Search error: {str(e)}"
+
+
+@tool
+async def compare_consumption(source_ids: List[str]) -> str:
+    """Compare electricity consumption across multiple bills.
+
+    Use this to analyze consumption trends, compare costs between periods,
+    or identify usage patterns across multiple bills.
+
+    Extracts data from each bill and provides a comparison summary including:
+    - Total kWh and cost per bill
+    - Month-over-month changes
+    - Average daily consumption
+    - Cost per kWh
+
+    Args:
+        source_ids: List of OCR document IDs to compare
+                   Example: ["ocr_abc123", "ocr_def456"]
+
+    Returns:
+        JSON comparison with:
+        - bills: Array of extracted data per bill
+        - comparison: Aggregated statistics and trends
+    """
+    print(f"[Consumption] compare_consumption called - source_ids: {source_ids}")
+
+    if _vector_store is None:
+        return "Error: Vector store not initialized."
+    if _consumption_extractor is None:
+        return "Error: Consumption extractor not initialized. LLM required."
+
+    if not source_ids or len(source_ids) < 2:
+        return "Error: Please provide at least 2 source IDs to compare."
+
+    try:
+        bills = []
+        extraction_errors = []
+
+        for source_id in source_ids:
+            # Retrieve and extract each bill
+            result = await _vector_store.get_embedding(source_id)
+
+            if result is None:
+                extraction_errors.append(f"Document '{source_id}' not found")
+                continue
+
+            form_data = result.form_data or {}
+            ocr_text = form_data.get("combined_text", "")
+
+            if not ocr_text:
+                extraction_errors.append(f"No OCR text in '{source_id}'")
+                continue
+
+            # Extract consumption data
+            extraction = await _consumption_extractor.extract_with_retry(ocr_text)
+
+            bills.append({
+                "source_id": source_id,
+                "original_filename": form_data.get("original_filename", "unknown"),
+                "billing_period_start": str(extraction.billing_period_start) if extraction.billing_period_start else None,
+                "billing_period_end": str(extraction.billing_period_end) if extraction.billing_period_end else None,
+                "consumption_kwh": extraction.consumption_kwh,
+                "total_amount": extraction.total_amount,
+                "daily_average_kwh": extraction.daily_average_kwh,
+                "provider_name": extraction.provider_name,
+                "extraction_confidence": extraction.extraction_confidence,
+            })
+
+        if len(bills) < 2:
+            return json.dumps({
+                "error": "Could not extract data from enough bills for comparison",
+                "extraction_errors": extraction_errors,
+                "bills_extracted": len(bills)
+            }, indent=2)
+
+        # Calculate comparison statistics
+        total_kwh = sum(b["consumption_kwh"] or 0 for b in bills)
+        total_cost = sum(b["total_amount"] or 0 for b in bills)
+        avg_kwh = total_kwh / len(bills) if bills else 0
+        avg_cost = total_cost / len(bills) if bills else 0
+
+        # Calculate cost per kWh for each bill
+        for bill in bills:
+            if bill["consumption_kwh"] and bill["total_amount"]:
+                bill["cost_per_kwh"] = round(bill["total_amount"] / bill["consumption_kwh"], 4)
+            else:
+                bill["cost_per_kwh"] = None
+
+        # Sort by billing period if available
+        bills_with_dates = [b for b in bills if b["billing_period_end"]]
+        bills_with_dates.sort(key=lambda x: x["billing_period_end"])
+
+        comparison = {
+            "bills": bills_with_dates if bills_with_dates else bills,
+            "summary": {
+                "total_bills_compared": len(bills),
+                "total_consumption_kwh": round(total_kwh, 2),
+                "total_cost_sgd": round(total_cost, 2),
+                "average_consumption_kwh": round(avg_kwh, 2),
+                "average_cost_sgd": round(avg_cost, 2),
+            },
+            "extraction_errors": extraction_errors if extraction_errors else None,
+        }
+
+        # Add trend if we have dates
+        if len(bills_with_dates) >= 2:
+            first = bills_with_dates[0]
+            last = bills_with_dates[-1]
+            if first["consumption_kwh"] and last["consumption_kwh"]:
+                kwh_change = last["consumption_kwh"] - first["consumption_kwh"]
+                kwh_pct = (kwh_change / first["consumption_kwh"]) * 100 if first["consumption_kwh"] else 0
+                comparison["summary"]["consumption_trend"] = {
+                    "change_kwh": round(kwh_change, 2),
+                    "change_percent": round(kwh_pct, 1),
+                    "direction": "increased" if kwh_change > 0 else "decreased" if kwh_change < 0 else "unchanged"
+                }
+
+        return json.dumps(comparison, indent=2, default=str)
+
+    except Exception as e:
+        return f"Comparison error: {str(e)}"
+
+
 # Export all RAG tools as a list for easy registration
 RAG_TOOLS = [
+    # Existing tools
     semantic_search,
     filter_by_metadata,
     get_document_by_id,
     list_available_categories,
     hybrid_search,
     get_statistics,
+    # Consumption tools
+    extract_consumption_data,
+    search_utility_bills,
+    compare_consumption,
 ]

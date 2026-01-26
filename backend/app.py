@@ -3,9 +3,10 @@ FastAPI endpoints for Ollama chat and donor/volunteer recommendation system.
 
 Endpoints:
 - /chat: Chat with Ollama model using LangGraph with memory
-- /rag/search: Agentic RAG search
+- /rag/search: Agentic RAG search (includes consumption data extraction)
 - /singpass/mock: Mock Singpass data
 - /ocr/process: Process images with OCR
+- /consumption/extract: Extract structured consumption data from OCR documents
 """
 
 import os
@@ -619,6 +620,106 @@ async def get_ocr_result(source_id: str):
         "form_type": result.form_type,
         "form_data": result.form_data
     }
+
+
+# ============================================================================
+# Consumption Data Extraction Endpoints
+# ============================================================================
+
+class ConsumptionExtractRequest(BaseModel):
+    """Request for consumption data extraction."""
+    source_id: str = Field(..., description="The OCR document source ID")
+
+
+class ConsumptionExtractResponse(BaseModel):
+    """Response with extracted consumption data."""
+    source_id: str
+    original_filename: Optional[str] = None
+    extraction_successful: bool
+    consumption_data: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+@app.post("/consumption/extract", response_model=ConsumptionExtractResponse)
+async def extract_consumption(request: ConsumptionExtractRequest):
+    """
+    Extract structured consumption data from a stored OCR document.
+
+    This endpoint extracts Singapore electricity bill information including:
+    - kWh consumption
+    - Total cost in SGD
+    - Billing period dates
+    - Provider name (SP Services, Geneco, etc.)
+    - Tariff breakdown (if available)
+
+    The extraction uses an LLM to parse the OCR text.
+    """
+    if not vector_store:
+        raise HTTPException(status_code=503, detail="Database not connected")
+
+    try:
+        # Retrieve the OCR document
+        result = await vector_store.get_embedding(request.source_id)
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail=f"OCR document '{request.source_id}' not found"
+            )
+
+        # Check if it's an OCR document
+        form_data = result.form_data or {}
+        if form_data.get("source_type") != "ocr":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Document '{request.source_id}' is not an OCR result"
+            )
+
+        # Get OCR text
+        ocr_text = form_data.get("combined_text", "")
+        if not ocr_text:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No OCR text found in document '{request.source_id}'"
+            )
+
+        # Initialize extractor with LLM
+        from services.consumption_extractor import ConsumptionExtractor
+        from langchain_ollama import ChatOllama
+
+        api_key = os.getenv('OLLAMA_API_KEY')
+        if api_key:
+            llm = ChatOllama(
+                model="gpt-oss:120b",
+                base_url="https://ollama.com",
+                client_kwargs={
+                    "headers": {"Authorization": f"Bearer {api_key}"}
+                }
+            )
+        else:
+            llm = ChatOllama(model="gpt-oss:120b-cloud")
+
+        extractor = ConsumptionExtractor(llm)
+
+        # Extract consumption data
+        extraction = await extractor.extract_with_retry(ocr_text)
+
+        return ConsumptionExtractResponse(
+            source_id=request.source_id,
+            original_filename=form_data.get("original_filename"),
+            extraction_successful=extraction.extraction_confidence > 0.3,
+            consumption_data=extraction.model_dump(exclude={"raw_ocr_text"}),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return ConsumptionExtractResponse(
+            source_id=request.source_id,
+            extraction_successful=False,
+            error=str(e),
+        )
 
 
 # ============================================================================
