@@ -27,3 +27,4 @@ Thumbs.db
 
 # Test/dev files (optional - remove if you want to keep)
 test.ipynb
+.claude/
