@@ -22,6 +22,48 @@ SG_ELECTRICITY_PROVIDERS = [
 ]
 
 
+class MonthlyConsumption(BaseModel):
+    """Monthly consumption data point extracted from trend charts."""
+
+    month: Optional[str] = Field(
+        None,
+        description="Month abbreviation (e.g., 'JAN', 'FEB', 'MAR')"
+    )
+    value: Optional[float] = Field(
+        None,
+        description="Consumption value for that month"
+    )
+    unit: Optional[str] = Field(
+        None,
+        description="Unit of measurement (e.g., 'kWh', 'Cu M')"
+    )
+
+
+class ConsumptionTrend(BaseModel):
+    """Consumption trend data extracted from bar charts on utility bills."""
+
+    service_type: Optional[str] = Field(
+        None,
+        description="Type of service (Electricity, Gas, Water)"
+    )
+    monthly_data: List[MonthlyConsumption] = Field(
+        default_factory=list,
+        description="Monthly consumption values from bar chart"
+    )
+    neighbour_average: Optional[float] = Field(
+        None,
+        description="Neighbour average consumption if shown"
+    )
+    national_average: Optional[float] = Field(
+        None,
+        description="National average consumption if shown"
+    )
+    trend_direction: Optional[str] = Field(
+        None,
+        description="Overall trend: 'increasing', 'decreasing', or 'stable'"
+    )
+
+
 class TariffTier(BaseModel):
     """Tiered electricity tariff rate structure."""
 
@@ -114,6 +156,40 @@ class ElectricityBillExtraction(BaseModel):
     daily_average_kwh: Optional[float] = Field(
         None,
         description="Average daily consumption in kWh"
+    )
+
+    # Gas Services (for SP combined bills)
+    gas_usage_kwh: Optional[float] = Field(
+        None,
+        description="Gas consumption in kWh"
+    )
+    gas_charges: Optional[float] = Field(
+        None,
+        description="Gas charges in SGD"
+    )
+    gas_provider: Optional[str] = Field(
+        None,
+        description="Gas provider name (e.g., City Gas Pte Ltd)"
+    )
+
+    # Water Services (for SP combined bills)
+    water_usage_cu_m: Optional[float] = Field(
+        None,
+        description="Water consumption in cubic meters (Cu M)"
+    )
+    water_charges: Optional[float] = Field(
+        None,
+        description="Water charges in SGD"
+    )
+    water_provider: Optional[str] = Field(
+        None,
+        description="Water provider name (e.g., Public Utilities Board)"
+    )
+
+    # Consumption Trends (extracted from bar charts)
+    consumption_trends: List[ConsumptionTrend] = Field(
+        default_factory=list,
+        description="Historical consumption trends from bar charts for each service"
     )
 
     # Cost Breakdown (all amounts in SGD)

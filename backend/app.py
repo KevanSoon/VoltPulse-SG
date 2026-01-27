@@ -66,18 +66,13 @@ class SingpassMockData(BaseModel):
     organization_type: Optional[str] = None
 
 
-class OCRResult(BaseModel):
-    """Single OCR detection result."""
-    text: str
-    box: List[List[float]]
-
-
 class OCRResponse(BaseModel):
-    """Response from OCR processing."""
-    ocr_results: Dict[str, OCRResult]
+    """Response from OCR/Vision processing."""
     extracted_texts: List[str]
     embedding_stored: bool
     source_id: str
+    extraction_data: Optional[Dict[str, Any]] = None
+    extraction_confidence: float = 0.0
 
 
 # ============================================================================
@@ -474,15 +469,14 @@ async def list_singpass_mock_profiles():
 @app.post("/ocr/process", response_model=OCRResponse)
 async def process_ocr(file: UploadFile = File(...)):
     """
-    Process an uploaded image using PaddleOCR via Gradio client.
+    Process an uploaded utility bill image using OpenAI Vision.
 
     1. Receives uploaded image file
-    2. Saves temporarily and sends to PaddleOCR Gradio Space
-    3. Extracts text from OCR results
-    4. Generates embedding using SeaLion encoder
-    5. Stores embedding in Supabase vector database
+    2. Uses OpenAI Vision API to extract ALL text AND chart data
+    3. Generates embedding using SeaLion encoder
+    4. Stores embedding and extraction data in Supabase vector database
 
-    Returns OCR results and extracted text for embedding.
+    Returns extracted data including consumption trends from bar charts.
     """
     if not encoder:
         raise HTTPException(status_code=503, detail="Encoder not initialized")
@@ -497,110 +491,91 @@ async def process_ocr(file: UploadFile = File(...)):
             detail=f"Invalid file type: {file.content_type}. Allowed: {allowed_types}"
         )
 
-    temp_file_path = None
     try:
-        # Save uploaded file to temp location
-        suffix = os.path.splitext(file.filename)[1] if file.filename else ".png"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-            content = await file.read()
-            temp_file.write(content)
-            temp_file_path = temp_file.name
+        # Read file content
+        image_bytes = await file.read()
 
-        # Call PaddleOCR via Gradio client
-        from gradio_client import Client, handle_file
+        # Use OpenAI Vision to extract all data including charts
+        from services.vision_extractor import VisionExtractor
 
-        client = Client("kevansoon/PaddleOCR")
-        result = client.predict(
-            img=handle_file(temp_file_path),
-            lang="en",
-            api_name="/predict"
+        vision_extractor = VisionExtractor()
+        extraction = await vision_extractor.extract_with_retry(
+            image_bytes=image_bytes,
+            filename=file.filename
         )
 
-        # Parse OCR results - result is typically a list of [box, text, confidence]
-        ocr_results = {}
+        # Build extracted texts list from extraction for embedding
         extracted_texts = []
 
-        if isinstance(result, list):
-            for idx, item in enumerate(result):
-                if isinstance(item, (list, tuple)) and len(item) >= 2:
-                    # Format: [box_coords, text, confidence]
-                    box = item[0] if len(item) > 0 else []
-                    text = str(item[1]) if len(item) > 1 else ""
+        if extraction.customer_name:
+            extracted_texts.append(f"Customer: {extraction.customer_name}")
+        if extraction.premise_address:
+            extracted_texts.append(f"Address: {extraction.premise_address}")
+        if extraction.provider_name:
+            extracted_texts.append(f"Provider: {extraction.provider_name}")
+        if extraction.consumption_kwh:
+            extracted_texts.append(f"Electricity: {extraction.consumption_kwh} kWh")
+        if extraction.gas_usage_kwh:
+            extracted_texts.append(f"Gas: {extraction.gas_usage_kwh} kWh")
+        if extraction.water_usage_cu_m:
+            extracted_texts.append(f"Water: {extraction.water_usage_cu_m} Cu M")
+        if extraction.total_amount:
+            extracted_texts.append(f"Total: S${extraction.total_amount}")
 
-                    if text.strip():
-                        ocr_results[str(idx)] = OCRResult(
-                            text=text,
-                            box=box if isinstance(box, list) else []
-                        )
-                        extracted_texts.append(text)
-                elif isinstance(item, dict):
-                    # Alternative dict format
-                    text = item.get("text", item.get("label", ""))
-                    box = item.get("box", item.get("bbox", []))
+        # Add consumption trend summaries
+        for trend in extraction.consumption_trends:
+            if trend.service_type and trend.monthly_data:
+                values = [f"{m.month}:{m.value}" for m in trend.monthly_data if m.month and m.value]
+                if values:
+                    extracted_texts.append(f"{trend.service_type} trend: {', '.join(values)}")
 
-                    if text.strip():
-                        ocr_results[str(idx)] = OCRResult(
-                            text=text,
-                            box=box if isinstance(box, list) else []
-                        )
-                        extracted_texts.append(text)
+        # Generate unique source ID
+        source_id = f"vision_{uuid.uuid4().hex[:12]}"
 
-        # Clean up extracted texts - only keep actual words/phrases
-        cleaned_texts = []
-        for text in extracted_texts:
-            # Filter out very short strings or purely numeric strings that aren't meaningful
-            cleaned = text.strip()
-            if len(cleaned) > 0:
-                cleaned_texts.append(cleaned)
+        # Combine texts for embedding
+        combined_text = " ".join(extracted_texts)
 
-        # Generate unique source ID for this OCR result
-        source_id = f"ocr_{uuid.uuid4().hex[:12]}"
-
-        # Combine extracted texts for embedding
-        combined_text = " ".join(cleaned_texts)
+        # Get full extraction data as dict (excluding raw_ocr_text for storage)
+        extraction_dict = extraction.model_dump(exclude={"raw_ocr_text"})
 
         embedding_stored = False
         if combined_text.strip():
             # Generate embedding using SeaLion encoder
             embedding = await encoder.encode(combined_text)
 
-            # Store in vector database
+            # Store in vector database with full extraction data
             form_data = {
-                "source_type": "ocr",
+                "source_type": "vision",
                 "original_filename": file.filename,
-                "extracted_texts": cleaned_texts,
-                "text_count": len(cleaned_texts),
-                "combined_text": combined_text
+                "extracted_texts": extracted_texts,
+                "text_count": len(extracted_texts),
+                "combined_text": combined_text,
+                "extraction_data": extraction_dict
             }
 
             await vector_store.store_embedding(
                 form_id=source_id,
-                form_type="ocr",
+                form_type="utility_bill",
                 embedding=embedding,
                 form_data=form_data
             )
             embedding_stored = True
-            print(f"[OK] OCR embedding stored: {source_id} with {len(cleaned_texts)} text items")
+            print(f"[OK] Vision extraction stored: {source_id}")
+            print(f"    - Confidence: {extraction.extraction_confidence:.0%}")
+            print(f"    - Consumption trends: {len(extraction.consumption_trends)} services")
 
         return OCRResponse(
-            ocr_results=ocr_results,
-            extracted_texts=cleaned_texts,
+            extracted_texts=extracted_texts,
             embedding_stored=embedding_stored,
-            source_id=source_id
+            source_id=source_id,
+            extraction_data=extraction_dict,
+            extraction_confidence=extraction.extraction_confidence
         )
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-    finally:
-        # Clean up temp file
-        if temp_file_path and os.path.exists(temp_file_path):
-            try:
-                os.unlink(temp_file_path)
-            except:
-                pass
 
 
 @app.get("/ocr/results/{source_id}")
@@ -643,71 +618,83 @@ class ConsumptionExtractResponse(BaseModel):
 @app.post("/consumption/extract", response_model=ConsumptionExtractResponse)
 async def extract_consumption(request: ConsumptionExtractRequest):
     """
-    Extract structured consumption data from a stored OCR document.
+    Retrieve structured consumption data from a stored vision-processed document.
 
-    This endpoint extracts Singapore electricity bill information including:
-    - kWh consumption
+    This endpoint returns pre-extracted Singapore utility bill information including:
+    - Electricity, Gas, Water consumption
     - Total cost in SGD
     - Billing period dates
-    - Provider name (SP Services, Geneco, etc.)
-    - Tariff breakdown (if available)
+    - Provider names
+    - Consumption trends from bar charts
 
-    The extraction uses an LLM to parse the OCR text.
+    Note: Extraction is done at upload time using OpenAI Vision.
+    This endpoint retrieves the already-extracted data.
     """
     if not vector_store:
         raise HTTPException(status_code=503, detail="Database not connected")
 
     try:
-        # Retrieve the OCR document
+        # Retrieve the document
         result = await vector_store.get_embedding(request.source_id)
         if not result:
             raise HTTPException(
                 status_code=404,
-                detail=f"OCR document '{request.source_id}' not found"
+                detail=f"Document '{request.source_id}' not found"
             )
 
-        # Check if it's an OCR document
         form_data = result.form_data or {}
-        if form_data.get("source_type") != "ocr":
-            raise HTTPException(
-                status_code=400,
-                detail=f"Document '{request.source_id}' is not an OCR result"
+        source_type = form_data.get("source_type", "")
+
+        # Check if extraction data exists (from vision processing)
+        extraction_data = form_data.get("extraction_data")
+
+        if extraction_data:
+            # Vision-processed document - return pre-extracted data
+            confidence = extraction_data.get("extraction_confidence", 0.0)
+            return ConsumptionExtractResponse(
+                source_id=request.source_id,
+                original_filename=form_data.get("original_filename"),
+                extraction_successful=confidence > 0.3,
+                consumption_data=extraction_data,
             )
 
-        # Get OCR text
-        ocr_text = form_data.get("combined_text", "")
-        if not ocr_text:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No OCR text found in document '{request.source_id}'"
+        # Legacy OCR document - try to extract using LLM
+        if source_type == "ocr":
+            ocr_text = form_data.get("combined_text", "")
+            if not ocr_text:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No text found in document '{request.source_id}'"
+                )
+
+            from services.consumption_extractor import ConsumptionExtractor
+            from langchain_ollama import ChatOllama
+
+            api_key = os.getenv('OLLAMA_API_KEY')
+            if api_key:
+                llm = ChatOllama(
+                    model="gpt-oss:120b",
+                    base_url="https://ollama.com",
+                    client_kwargs={
+                        "headers": {"Authorization": f"Bearer {api_key}"}
+                    }
+                )
+            else:
+                llm = ChatOllama(model="gpt-oss:120b-cloud")
+
+            extractor = ConsumptionExtractor(llm)
+            extraction = await extractor.extract_with_retry(ocr_text)
+
+            return ConsumptionExtractResponse(
+                source_id=request.source_id,
+                original_filename=form_data.get("original_filename"),
+                extraction_successful=extraction.extraction_confidence > 0.3,
+                consumption_data=extraction.model_dump(exclude={"raw_ocr_text"}),
             )
 
-        # Initialize extractor with LLM
-        from services.consumption_extractor import ConsumptionExtractor
-        from langchain_ollama import ChatOllama
-
-        api_key = os.getenv('OLLAMA_API_KEY')
-        if api_key:
-            llm = ChatOllama(
-                model="gpt-oss:120b",
-                base_url="https://ollama.com",
-                client_kwargs={
-                    "headers": {"Authorization": f"Bearer {api_key}"}
-                }
-            )
-        else:
-            llm = ChatOllama(model="gpt-oss:120b-cloud")
-
-        extractor = ConsumptionExtractor(llm)
-
-        # Extract consumption data
-        extraction = await extractor.extract_with_retry(ocr_text)
-
-        return ConsumptionExtractResponse(
-            source_id=request.source_id,
-            original_filename=form_data.get("original_filename"),
-            extraction_successful=extraction.extraction_confidence > 0.3,
-            consumption_data=extraction.model_dump(exclude={"raw_ocr_text"}),
+        raise HTTPException(
+            status_code=400,
+            detail=f"Document '{request.source_id}' has no extraction data"
         )
 
     except HTTPException:
