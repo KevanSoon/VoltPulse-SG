@@ -20,11 +20,11 @@ export default function StatsCard({
   subtitle,
 }: StatsCardProps) {
   const getTrendColor = () => {
-    if (trendColor === "green") return "text-green-400";
-    if (trendColor === "red") return "text-red-400";
-    if (trendDirection === "up") return "text-green-400";
-    if (trendDirection === "down") return "text-red-400";
-    return "text-gray-400";
+    if (trendColor === "green") return "text-green-600";
+    if (trendColor === "red") return "text-red-600";
+    if (trendDirection === "up") return "text-green-600";
+    if (trendDirection === "down") return "text-red-600";
+    return "text-gray-500";
   };
 
   const getTrendIcon = () => {
@@ -66,17 +66,17 @@ export default function StatsCard({
   };
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-5 border border-gray-700 hover:border-gray-600 transition-colors">
+    <div className="bg-white rounded-xl p-5 border border-gray-200 hover:border-green-300 hover:shadow-md transition-all">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-gray-400 text-sm font-medium">{title}</p>
-          <p className="text-2xl font-bold text-white mt-1">{value}</p>
+          <p className="text-gray-500 text-sm font-medium">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
           {subtitle && (
-            <p className="text-gray-500 text-xs mt-1">{subtitle}</p>
+            <p className="text-gray-400 text-xs mt-1">{subtitle}</p>
           )}
         </div>
         {icon && (
-          <div className="text-gray-500 bg-gray-700/50 p-2 rounded-lg">
+          <div className="text-green-600 bg-green-50 p-2 rounded-lg">
             {icon}
           </div>
         )}

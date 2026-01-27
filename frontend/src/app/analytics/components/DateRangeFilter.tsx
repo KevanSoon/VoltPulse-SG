@@ -48,8 +48,8 @@ export default function DateRangeFilter({ onChange }: DateRangeFilterProps) {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-gray-400 text-sm">Period:</span>
-      <div className="flex bg-gray-700/50 rounded-lg p-1">
+      <span className="text-gray-500 text-sm">Period:</span>
+      <div className="flex bg-gray-100 rounded-lg p-1">
         {[
           { value: "1m", label: "1M" },
           { value: "3m", label: "3M" },
@@ -62,8 +62,8 @@ export default function DateRangeFilter({ onChange }: DateRangeFilterProps) {
             onClick={() => handlePresetChange(option.value)}
             className={`px-3 py-1 text-sm rounded-md transition-colors ${
               preset === option.value
-                ? "bg-blue-600 text-white"
-                : "text-gray-400 hover:text-white"
+                ? "bg-green-600 text-white"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
             }`}
           >
             {option.label}

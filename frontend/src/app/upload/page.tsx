@@ -81,17 +81,15 @@ export default function Upload() {
     };
 
     return (
-        <main className="min-h-screen bg-background">
-            {/* Navbar */}
+        <main className="min-h-screen bg-background flex flex-col">
             <Navbar />
 
-            {/* Upload */}
-            <main className="p-8">
+            <main className="flex-1 p-8">
                 <div className="max-w-4xl mx-auto">
-                    <div>
+                    <div className="mb-8">
                         <Link
                             href="/"
-                            className="text-gray-500 mb-8 flex items-center gap-2 transition-colors"
+                            className="text-gray-500 hover:text-green-600 flex items-center gap-2 transition-colors"
                             title="Back to Home"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,24 +98,22 @@ export default function Upload() {
                             Back to Home
                         </Link>
                     </div>
-                    <div className="flex items-center justify-center mb-8">
 
-                        <div className="text-center">
-                            <h1 className="text-4xl font-bold mb-2">
-                                Upload Your Utility Bill
-                            </h1>
-                            <p className="text-gray-500">
-                                Upload an image of your bill and let our AI Analyze your consumption pattern
-                            </p>
-                        </div>
+                    <div className="text-center mb-8">
+                        <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                            Upload Your Utility Bill
+                        </h1>
+                        <p className="text-gray-600">
+                            Upload an image of your bill and let our AI analyze your consumption pattern
+                        </p>
                     </div>
 
                     {/* Dropzone */}
                     <div
                         {...getRootProps()}
                         className={`border-2 border-dashed rounded-xl p-24 text-center cursor-pointer transition-all duration-200 ${isDragActive
-                            ? "border-blue-500 bg-blue-500/10"
-                            : "border-green-600 hover:border-gray-500 bg-emerald-500/10"
+                            ? "border-green-500 bg-green-50"
+                            : "border-green-400 hover:border-green-500 bg-green-50/50"
                             }`}
                     >
                         <input {...getInputProps()} />
@@ -132,7 +128,7 @@ export default function Upload() {
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div className="w-16 h-16 mx-auto text-gray-500">
+                                <div className="w-16 h-16 mx-auto text-green-500">
                                     <svg
                                         fill="none"
                                         stroke="currentColor"
@@ -148,7 +144,7 @@ export default function Upload() {
                                     </svg>
                                 </div>
                                 <div className="pt-4">
-                                    <p className="text-xl">
+                                    <p className="text-xl text-gray-700">
                                         {isDragActive
                                             ? "Drop the image here..."
                                             : "Drag & drop an image here"}
@@ -165,7 +161,7 @@ export default function Upload() {
                             <button
                                 onClick={handleUpload}
                                 disabled={loading}
-                                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors flex items-center gap-2"
+                                className="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors flex items-center gap-2"
                             >
                                 {loading ? (
                                     <>
@@ -196,7 +192,7 @@ export default function Upload() {
                             </button>
                             <button
                                 onClick={clearFile}
-                                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
+                                className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors"
                             >
                                 Clear
                             </button>
@@ -205,7 +201,7 @@ export default function Upload() {
 
                     {/* Error Message */}
                     {error && (
-                        <div className="mt-6 p-4 bg-red-400/50 border border-red-700 rounded-lg">
+                        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
                             <p className="text-red-600">{error}</p>
                         </div>
                     )}
@@ -213,8 +209,8 @@ export default function Upload() {
                     {/* Results */}
                     {results && (
                         <div className="mt-8 space-y-6">
-                            <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
-                                <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
                                     <svg
                                         className="w-6 h-6 text-green-500"
                                         fill="none"
@@ -234,7 +230,7 @@ export default function Upload() {
                                     {results.extracted_texts.map((text, index) => (
                                         <div
                                             key={index}
-                                            className="p-3 bg-gray-900/50 rounded-lg text-gray-300 font-mono"
+                                            className="p-3 bg-gray-50 rounded-lg text-gray-700 font-mono text-sm"
                                         >
                                             {text}
                                         </div>
@@ -242,8 +238,8 @@ export default function Upload() {
                                 </div>
                             </div>
 
-                            <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
-                                <h2 className="text-xl font-semibold text-white mb-4">
+                            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                                <h2 className="text-xl font-semibold text-gray-900 mb-4">
                                     Storage Status
                                 </h2>
                                 <div className="flex items-center gap-3">
@@ -251,9 +247,9 @@ export default function Upload() {
                                         className={`w-3 h-3 rounded-full ${results.embedding_stored ? "bg-green-500" : "bg-yellow-500"
                                             }`}
                                     />
-                                    <span className="text-gray-300">
+                                    <span className="text-gray-700">
                                         {results.embedding_stored
-                                            ? "Embedding stored in Supabase"
+                                            ? "Embedding stored successfully"
                                             : "Embedding pending"}
                                     </span>
                                 </div>
@@ -262,24 +258,43 @@ export default function Upload() {
                                 </p>
                             </div>
 
-                            <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
-                                <h2 className="text-xl font-semibold text-white mb-4">
+                            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                                <h2 className="text-xl font-semibold text-gray-900 mb-4">
                                     Full OCR Response
                                 </h2>
-                                <pre className="text-sm text-gray-400 overflow-x-auto p-4 bg-gray-900 rounded-lg">
+                                <pre className="text-sm text-gray-600 overflow-x-auto p-4 bg-gray-50 rounded-lg">
                                     {JSON.stringify(results.ocr_results, null, 2)}
                                 </pre>
+                            </div>
+
+                            {/* Next Steps */}
+                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100">
+                                <h3 className="font-semibold text-gray-900 mb-2">What's Next?</h3>
+                                <p className="text-gray-600 mb-4">
+                                    Your bill has been processed! Chat with our AI assistant to get insights
+                                    and personalized recommendations.
+                                </p>
+                                <div className="flex gap-4">
+                                    <Link
+                                        href="/chat"
+                                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                                    >
+                                        Chat with AI
+                                    </Link>
+                                    <Link
+                                        href="/analytics"
+                                        className="px-4 py-2 bg-white border border-gray-200 hover:border-green-300 text-gray-700 font-medium rounded-lg transition-colors"
+                                    >
+                                        View Dashboard
+                                    </Link>
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
-
             </main>
 
-            {/* Footer */}
             <Footer />
-
-            {/* Chatbot */}
             <Chatbot />
         </main>
     );

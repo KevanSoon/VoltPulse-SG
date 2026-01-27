@@ -1,66 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import DistrictHeatmap from "./components/DistrictHeatmap";
-import AnomalyTable from "./components/AnomalyTable";
-import CohortChart from "./components/CohortChart";
-import InterventionTracker from "./components/InterventionTracker";
+import { useState } from "react";
+import dynamic from "next/dynamic";
 import StatsCard from "./components/StatsCard";
 import DateRangeFilter from "./components/DateRangeFilter";
+import BillSummary from "./components/BillSummary";
+import Recommendations from "./components/Recommendations";
+import MonthlyConsumptionChart from "./components/MonthlyConsumptionChart";
 
-interface AnalyticsSummary {
-  total_households: number;
-  total_consumption_kwh: number;
-  average_consumption_kwh: number;
-  anomalies_detected: number;
-  anomaly_rate_percent: number;
-  active_interventions: number;
-  total_savings_kwh: number;
-}
+// Dynamic import for the map component to avoid SSR issues
+const SingaporeHeatmap = dynamic(
+  () => import("./components/SingaporeHeatmap"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full" />
+      </div>
+    ),
+  }
+);
 
 export default function AnalyticsDashboard() {
-  const [dateRange, setDateRange] = useState<{ start: Date; end: Date } | null>(
-    null
-  );
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchSummary();
-  }, []);
-
-  const fetchSummary = async () => {
-    try {
-      const response = await fetch("/api/analytics/summary");
-      if (response.ok) {
-        const data = await response.json();
-        setSummary(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch summary:", error);
-      // Set mock data
-      setSummary({
-        total_households: 156,
-        total_consumption_kwh: 58420,
-        average_consumption_kwh: 375,
-        anomalies_detected: 12,
-        anomaly_rate_percent: 7.7,
-        active_interventions: 8,
-        total_savings_kwh: 4250,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [dateRange, setDateRange] = useState<{ start: Date; end: Date } | null>(null);
 
   return (
     <div className="space-y-8">
-      {/* Header with Filters */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">Analytics Dashboard</h2>
-          <p className="text-gray-400 mt-1">
-            District-level consumption analysis with statistical anomaly detection
+          <h1 className="text-3xl font-bold text-gray-900">Your Energy Dashboard</h1>
+          <p className="text-gray-600 mt-1">
+            Track your consumption, compare with others, and discover ways to save
           </p>
         </div>
         <DateRangeFilter onChange={setDateRange} />
@@ -69,22 +40,11 @@ export default function AnalyticsDashboard() {
       {/* Quick Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
-          title="Total Households"
-          value={loading ? "..." : summary?.total_households.toLocaleString() || "0"}
-          trend={loading ? undefined : "+5.2% vs last month"}
+          title="This Month"
+          value="520 kWh"
+          trend="+9.5% vs last month"
           trendDirection="up"
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-          }
-        />
-        <StatsCard
-          title="Avg. Consumption"
-          value={loading ? "..." : `${summary?.average_consumption_kwh || 0} kWh`}
-          trend={loading ? undefined : "-2.1% vs last month"}
-          trendDirection="down"
-          trendColor="green"
+          trendColor="red"
           icon={
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -92,122 +52,107 @@ export default function AnalyticsDashboard() {
           }
         />
         <StatsCard
-          title="Anomalies Detected"
-          value={loading ? "..." : summary?.anomalies_detected || 0}
-          trend={loading ? undefined : `${summary?.anomaly_rate_percent.toFixed(1)}% of total`}
-          trendDirection="up"
-          trendColor="red"
-          subtitle="Outside 95% CI"
+          title="Monthly Average"
+          value="456 kWh"
+          trend="Based on 12 months"
+          trendDirection="neutral"
           icon={
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           }
         />
         <StatsCard
-          title="Active Interventions"
-          value={loading ? "..." : summary?.active_interventions || 0}
-          trend={loading ? undefined : `${summary?.total_savings_kwh?.toLocaleString() || 0} kWh saved`}
+          title="vs National Avg"
+          value="+30%"
+          trend="National: 400 kWh"
           trendDirection="up"
+          trendColor="red"
+          icon={
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          }
+        />
+        <StatsCard
+          title="Potential Savings"
+          value="S$45/mo"
+          trend="With recommended changes"
+          trendDirection="down"
           trendColor="green"
           icon={
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           }
         />
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* District Heatmap - Full Width */}
-        <div className="lg:col-span-2 bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-white">
-                Consumption by District
-              </h3>
-              <p className="text-gray-400 text-sm mt-1">
-                Click on a district to view details
-              </p>
-            </div>
-            <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-1 rounded">
-              Singapore Postal Districts
-            </span>
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Bill Summary - Left Column */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-xl p-6 border border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Bill Summary</h2>
+            <BillSummary />
           </div>
-          <DistrictHeatmap dateRange={dateRange} />
+
+          {/* Monthly Consumption Chart */}
+          <div className="bg-white rounded-xl p-6 border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Monthly Consumption</h2>
+                <p className="text-gray-500 text-sm mt-1">Your electricity usage over the past year</p>
+              </div>
+            </div>
+            <MonthlyConsumptionChart />
+          </div>
         </div>
 
-        {/* Cohort Statistics */}
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-white">
-                Consumption by Housing Type
-              </h3>
-              <p className="text-gray-400 text-sm mt-1">
-                Mean with 95% confidence intervals
-              </p>
-            </div>
+        {/* Recommendations - Right Column */}
+        <div className="lg:col-span-1">
+          <div className="bg-white rounded-xl p-6 border border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">How to Save</h2>
+            <Recommendations />
           </div>
-          <CohortChart />
-        </div>
-
-        {/* Recent Anomalies */}
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-white">
-                Recent Anomalies
-              </h3>
-              <p className="text-gray-400 text-sm mt-1">
-                Accounts outside normal consumption range
-              </p>
-            </div>
-            <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-1 rounded">
-              |z| &gt; 1.96
-            </span>
-          </div>
-          <AnomalyTable limit={5} />
-        </div>
-
-        {/* Intervention Tracking - Full Width */}
-        <div className="lg:col-span-2 bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-white">
-                Intervention Impact Tracking
-              </h3>
-              <p className="text-gray-400 text-sm mt-1">
-                Before vs. After analysis with paired t-test significance
-              </p>
-            </div>
-            <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-1 rounded">
-              p &lt; 0.05 = Significant
-            </span>
-          </div>
-          <InterventionTracker />
         </div>
       </div>
 
-      {/* Methodology Note */}
-      <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700/50">
-        <h4 className="text-sm font-medium text-gray-300 mb-2">
-          Statistical Methodology
-        </h4>
-        <div className="text-xs text-gray-500 space-y-1">
-          <p>
-            <strong className="text-gray-400">Anomaly Detection:</strong> Uses 95%
-            confidence intervals (z-score threshold = 1.96). Records with |z| &gt;
-            1.96 are flagged as statistical outliers. P-values calculated using
-            two-tailed z-test.
-          </p>
-          <p>
-            <strong className="text-gray-400">Intervention Analysis:</strong> Uses
-            paired t-test to compare pre/post consumption. Statistical significance
-            determined at p &lt; 0.05. Effect size measured as percentage change in
-            mean consumption.
-          </p>
+      {/* Singapore Heatmap - Full Width */}
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Consumption by District</h2>
+            <p className="text-gray-500 text-sm mt-1">
+              See how your area compares to other districts in Singapore
+            </p>
+          </div>
+          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+            Click markers for details
+          </span>
+        </div>
+        <SingaporeHeatmap dateRange={dateRange} />
+      </div>
+
+      {/* Help Section */}
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100">
+        <div className="flex flex-col md:flex-row items-center gap-6">
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Need Help Understanding Your Usage?</h3>
+            <p className="text-gray-600">
+              Our AI assistant can analyze your bills, explain your consumption patterns,
+              and provide personalized recommendations to help you save.
+            </p>
+          </div>
+          <a
+            href="/chat"
+            className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+            Chat with AI Assistant
+          </a>
         </div>
       </div>
     </div>
