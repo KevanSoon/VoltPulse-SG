@@ -27,6 +27,9 @@ from pydantic import BaseModel, Field
 import tempfile
 import uuid
 
+# Analytics module import
+from analytics.router import router as analytics_router, set_vector_store as set_analytics_vector_store
+
 # Windows-specific fix for psycopg async compatibility
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -111,6 +114,8 @@ async def init_services():
             )
             await pool.open()
             vector_store = VectorStore(pool)
+            # Set vector store for analytics module
+            set_analytics_vector_store(vector_store)
             print("[OK] Database connection pool initialized")
         else:
             print("[WARN] Database credentials not configured, vector store disabled")
@@ -158,6 +163,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register analytics router
+app.include_router(analytics_router)
 
 
 # ============================================================================
