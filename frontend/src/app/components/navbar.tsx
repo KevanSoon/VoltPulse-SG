@@ -22,7 +22,7 @@ export function Navbar() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
             <Link
-              href="/"
+              href="/analytics"
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
               Dashboard
@@ -50,7 +50,7 @@ export function Navbar() {
           <div className="md:hidden py-4 border-t border-border">
             <div className="flex flex-col gap-4">
               <Link
-                href="/"
+                href="/analytics"
                 className="text-muted-foreground hover:text-foreground transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >

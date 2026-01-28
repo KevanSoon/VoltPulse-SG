@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import StatsCard from "./components/StatsCard";
 import ViewToggle, { ViewMode } from "./components/ViewToggle";
 import UtilityToggle, { UtilityType } from "./components/UtilityToggle";
@@ -433,8 +435,28 @@ Please be specific with product names and prices in SGD where possible.`,
                   </div>
                 ) : (
                   <>
-                    <div className="prose prose-sm max-w-none text-gray-700 max-h-[400px] overflow-y-auto">
-                      <div className="whitespace-pre-wrap">{aiRecommendations}</div>
+                    <div className="max-h-[500px] overflow-y-auto">
+                      <div className="prose prose-sm max-w-none
+                          prose-headings:text-gray-900 prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2
+                          prose-h2:text-lg prose-h2:border-b prose-h2:border-gray-200 prose-h2:pb-2
+                          prose-h3:text-base
+                          prose-p:text-gray-700 prose-p:my-2 prose-p:leading-relaxed
+                          prose-strong:text-gray-900 prose-strong:font-semibold
+                          prose-ul:my-2 prose-ul:space-y-1
+                          prose-ol:my-2 prose-ol:space-y-1
+                          prose-li:text-gray-700 prose-li:my-0
+                          prose-table:my-4 prose-table:border-collapse prose-table:w-full
+                          prose-th:bg-gray-100 prose-th:text-gray-900 prose-th:font-semibold prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:border prose-th:border-gray-200
+                          prose-td:px-3 prose-td:py-2 prose-td:border prose-td:border-gray-200 prose-td:text-gray-700
+                          prose-blockquote:border-l-4 prose-blockquote:border-green-500 prose-blockquote:bg-green-50 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:my-3 prose-blockquote:italic prose-blockquote:text-gray-700
+                          prose-code:bg-gray-100 prose-code:text-green-700 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
+                          prose-hr:border-gray-200 prose-hr:my-4
+                          prose-a:text-green-600 prose-a:no-underline hover:prose-a:underline
+                        ">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {aiRecommendations || ""}
+                        </ReactMarkdown>
+                      </div>
                     </div>
                     <div className="pt-4 border-t border-gray-100 flex gap-2">
                       <button
