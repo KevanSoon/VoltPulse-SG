@@ -6,7 +6,7 @@ from langchain_core.runnables import RunnableConfig
 
 class MessageClassifier(BaseModel):
     """Classification result for routing messages."""
-    message_type: Literal["logical", "consumption_query"] = Field(
+    message_type: Literal["logical", "consumption_query", "climate_voucher"] = Field(
         ...,
         description="Classify message for routing to appropriate agent."
     )
@@ -39,6 +39,7 @@ Respond ONLY with valid JSON in this exact format:
 
 Where TYPE is one of:
 - 'consumption_query': Questions about utility bills, electricity usage, kWh consumption, energy costs, billing periods, comparing bills
+- 'climate_voucher': Questions about Climate Vouchers, where to buy appliances, energy-efficient products, retailers, fridges, aircons, washing machines, LED lights, taps, toilets, water heaters, energy tick ratings, appliance recommendations, promotions at stores
 - 'logical': Facts, information, logical analysis, practical solutions (default for general queries)
 
 Examples:
@@ -47,6 +48,13 @@ Examples:
 - "How much kWh did I use last month?" → consumption_query
 - "Compare my energy bills" → consumption_query
 - "How much did I pay for electricity?" → consumption_query
+- "Where can I use my climate voucher?" → climate_voucher
+- "Which shops sell fridges with climate voucher?" → climate_voucher
+- "Recommend me an energy efficient aircon" → climate_voucher
+- "Best deals on washing machines" → climate_voucher
+- "What is a 4-tick rating?" → climate_voucher
+- "Where to buy LED lights near Bedok?" → climate_voucher
+- "Gain City promotions on aircon" → climate_voucher
 - "What is the capital of France?" → logical
 - "Tell me about energy saving tips" → logical"""
         },
@@ -56,7 +64,7 @@ Examples:
         }
     ])
     
-    print(f"[Classifier] Routed to: '{result.message_type}' → {'Agentic RAG' if result.message_type == 'consumption_query' else 'Logical Agent'}")
+    print(f"[Classifier] Routed to: '{result.message_type}' → {'Agentic RAG' if result.message_type in ('consumption_query', 'climate_voucher') else 'Logical Agent'}")
     return {"message_type": result.message_type}
 
 
