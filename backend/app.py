@@ -7,6 +7,7 @@ Endpoints:
 - /singpass/mock: Mock Singpass data
 - /ocr/process: Process images with OCR
 - /consumption/extract: Extract structured consumption data from OCR documents
+- /retailers/*: Climate Voucher retailer search and recommendations
 """
 
 import os
@@ -715,6 +716,378 @@ async def extract_consumption(request: ConsumptionExtractRequest):
             extraction_successful=False,
             error=str(e),
         )
+
+
+# ============================================================================
+# Climate Voucher Retailer Endpoints
+# ============================================================================
+
+class RetailerSearchRequest(BaseModel):
+    """Request for Climate Voucher retailer search."""
+    query: str = Field(..., description="Natural language search query")
+    product_category: Optional[str] = Field(None, description="Product filter (e.g., refrigerators, air_conditioners)")
+    planning_area: Optional[str] = Field(None, description="Singapore planning area filter")
+    limit: int = Field(10, ge=1, le=50)
+
+
+class RetailerLoadRequest(BaseModel):
+    """Request to load retailer data."""
+    use_sample_data: bool = Field(True, description="Use sample data (True) or full PDF parse (False)")
+
+
+class ApplianceSearchRequest(BaseModel):
+    """Request for appliance recommendations via Tavily."""
+    product_type: str = Field(..., description="Type of appliance to search for")
+    requirements: Optional[str] = Field(None, description="Specific requirements")
+    budget: Optional[str] = Field(None, description="Budget range")
+    brand_preference: Optional[str] = Field(None, description="Brand preference")
+
+
+# Global flag for retailer tools initialization
+_retailer_tools_initialized = False
+
+
+async def init_retailer_tools():
+    """Initialize Climate Voucher retailer tools."""
+    global _retailer_tools_initialized
+
+    if _retailer_tools_initialized:
+        return True
+
+    if encoder is None or vector_store is None:
+        print("[WARN] Cannot initialize retailer tools: encoder or vector_store not available")
+        return False
+
+    try:
+        from tools.retailer_tools import set_retailer_dependencies
+
+        # Get Tavily API key from environment
+        tavily_key = os.getenv("TAVILY_API_KEY")
+
+        set_retailer_dependencies(encoder, vector_store, tavily_key)
+        _retailer_tools_initialized = True
+        print("[OK] Climate Voucher retailer tools initialized")
+
+        if not tavily_key:
+            print("    [WARN] TAVILY_API_KEY not set - Tavily search features disabled")
+
+        return True
+
+    except Exception as e:
+        import traceback
+        print(f"[WARN] Retailer tools initialization error: {e}")
+        traceback.print_exc()
+        return False
+
+
+@app.post("/retailers/load")
+async def load_retailer_data(request: RetailerLoadRequest):
+    """
+    Load Climate Voucher retailer data into the vector store.
+
+    This embeds retailer information using SeaLion and stores it for
+    semantic search. Run this once to populate the retailer database.
+    """
+    if not encoder:
+        raise HTTPException(status_code=503, detail="Encoder not initialized")
+    if not vector_store:
+        raise HTTPException(status_code=503, detail="Database not connected")
+
+    try:
+        from services.retailer_loader import load_retailers_to_vector_store, SAMPLE_RETAILERS_DATA
+
+        # Load retailers
+        if request.use_sample_data:
+            result = await load_retailers_to_vector_store(
+                encoder=encoder,
+                vector_store=vector_store,
+                retailers_data=SAMPLE_RETAILERS_DATA
+            )
+        else:
+            # Try to parse full PDF data
+            from services.pdf_retailer_parser import get_full_retailer_data
+            full_data = get_full_retailer_data()
+            result = await load_retailers_to_vector_store(
+                encoder=encoder,
+                vector_store=vector_store,
+                retailers_data=full_data
+            )
+
+        return {
+            "status": "success",
+            "message": f"Loaded {result['loaded']} retailers into vector store",
+            "details": result
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/retailers/load-pdf")
+async def load_retailers_from_pdf(file: UploadFile = File(...)):
+    """
+    Upload and load Climate Voucher retailers PDF directly.
+
+    This endpoint:
+    1. Receives the PDF file
+    2. Parses all retailer data using pdfplumber
+    3. Embeds each retailer using SeaLion
+    4. Stores in the vector database for semantic search
+
+    The PDF should be the official NEA Climate Vouchers retailer list.
+    """
+    if not encoder:
+        raise HTTPException(status_code=503, detail="Encoder not initialized")
+    if not vector_store:
+        raise HTTPException(status_code=503, detail="Database not connected")
+
+    # Validate file type
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(
+            status_code=400,
+            detail="File must be a PDF. Please upload the Climate Vouchers retailer PDF."
+        )
+
+    try:
+        import pdfplumber
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="pdfplumber not installed. Run: pip install pdfplumber"
+        )
+
+    try:
+        import tempfile
+        import os as os_module
+
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+            content = await file.read()
+            tmp_file.write(content)
+            tmp_path = tmp_file.name
+
+        try:
+            # Parse PDF
+            from scripts.load_retailers_from_pdf import parse_pdf_to_retailers
+            retailers_data = parse_pdf_to_retailers(tmp_path)
+
+            if not retailers_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No retailers found in PDF. Ensure this is the correct Climate Vouchers retailer list."
+                )
+
+            # Load into vector store
+            from services.retailer_loader import load_retailers_to_vector_store
+            result = await load_retailers_to_vector_store(
+                encoder=encoder,
+                vector_store=vector_store,
+                retailers_data=retailers_data
+            )
+
+            return {
+                "status": "success",
+                "message": f"Loaded {result['loaded']} retailers from PDF",
+                "filename": file.filename,
+                "details": result
+            }
+
+        finally:
+            # Clean up temp file
+            os_module.unlink(tmp_path)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/retailers/search")
+async def search_retailers(request: RetailerSearchRequest):
+    """
+    Search for Climate Voucher participating retailers.
+
+    Use natural language to find retailers where you can spend your
+    Singapore Climate Vouchers on energy-efficient appliances.
+    """
+    # Ensure retailer tools are initialized
+    await init_retailer_tools()
+
+    if not _retailer_tools_initialized:
+        raise HTTPException(
+            status_code=503,
+            detail="Retailer tools not available. Ensure encoder and database are configured."
+        )
+
+    try:
+        from tools.retailer_tools import search_climate_voucher_retailers
+        import json
+
+        # Call the tool
+        result = await search_climate_voucher_retailers.ainvoke({
+            "query": request.query,
+            "product_category": request.product_category,
+            "planning_area": request.planning_area,
+            "limit": request.limit
+        })
+
+        return json.loads(result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/retailers/products/{product}")
+async def find_retailers_by_product(product: str, limit: int = 15):
+    """
+    Find all retailers selling a specific Climate Voucher eligible product.
+
+    Product options: refrigerators, air_conditioners, dc_fans, led_lights,
+    washing_machines, water_closets, sink_bib_taps_mixers, basin_taps_mixers,
+    shower_taps_mixers, heat_pump_water_heaters
+
+    Common aliases work too: fridge, aircon, fan, light, washer, toilet, tap, etc.
+    """
+    await init_retailer_tools()
+
+    if not _retailer_tools_initialized:
+        raise HTTPException(
+            status_code=503,
+            detail="Retailer tools not available."
+        )
+
+    try:
+        from tools.retailer_tools import find_retailers_by_product
+        import json
+
+        result = await find_retailers_by_product.ainvoke({
+            "product": product,
+            "limit": limit
+        })
+
+        return json.loads(result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/retailers/appliances/search")
+async def search_appliance_recommendations(request: ApplianceSearchRequest):
+    """
+    Search for recommended energy-efficient appliances using Tavily web search.
+
+    Find specific product recommendations, reviews, and prices for
+    Climate Voucher eligible appliances from Singapore retailers.
+
+    Requires TAVILY_API_KEY environment variable to be set.
+    """
+    await init_retailer_tools()
+
+    if not _retailer_tools_initialized:
+        raise HTTPException(
+            status_code=503,
+            detail="Retailer tools not available."
+        )
+
+    try:
+        from tools.retailer_tools import search_appliance_recommendations
+        import json
+
+        result = await search_appliance_recommendations.ainvoke({
+            "product_type": request.product_type,
+            "requirements": request.requirements,
+            "budget": request.budget,
+            "brand_preference": request.brand_preference
+        })
+
+        return json.loads(result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/retailers/promotions/{retailer_name}")
+async def get_retailer_promotions(retailer_name: str, product_type: Optional[str] = None):
+    """
+    Search for current promotions at a specific Climate Voucher retailer.
+
+    Requires TAVILY_API_KEY environment variable.
+    """
+    await init_retailer_tools()
+
+    if not _retailer_tools_initialized:
+        raise HTTPException(status_code=503, detail="Retailer tools not available.")
+
+    try:
+        from tools.retailer_tools import get_retailer_promotions
+        import json
+
+        result = await get_retailer_promotions.ainvoke({
+            "retailer_name": retailer_name,
+            "product_type": product_type
+        })
+
+        return json.loads(result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/retailers/energy-ratings/{product_type}")
+async def get_energy_rating_info(product_type: str):
+    """
+    Get information about energy efficiency ratings for a product type.
+
+    Explains Singapore's energy label system and tick ratings for
+    Climate Voucher eligible appliances.
+    """
+    await init_retailer_tools()
+
+    try:
+        from tools.retailer_tools import get_energy_rating_info
+        import json
+
+        result = await get_energy_rating_info.ainvoke({
+            "product_type": product_type
+        })
+
+        return json.loads(result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/retailers/tools")
+async def list_retailer_tools():
+    """List available Climate Voucher retailer tools."""
+    from tools.retailer_tools import RETAILER_TOOLS
+
+    tools_info = []
+    for tool in RETAILER_TOOLS:
+        tools_info.append({
+            "name": tool.name,
+            "description": tool.description,
+        })
+
+    return {
+        "tools": tools_info,
+        "total": len(tools_info),
+        "tavily_enabled": os.getenv("TAVILY_API_KEY") is not None
+    }
 
 
 # ============================================================================
