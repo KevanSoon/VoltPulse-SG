@@ -84,3 +84,14 @@ export interface ChartData {
   consumption: number;
   average: number;
 }
+
+export interface UtilityData {
+  currentUsage: number;
+  previousUsage: number | null;
+  nationalAverage: number;
+  neighbourAverage: number;
+  charges: number;
+  unit: string;
+  trendDirection: "increasing" | "decreasing" | "stable";
+  chartData: ChartData[];
+}

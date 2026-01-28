@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import StatsCard from "./components/StatsCard";
 import ViewToggle, { ViewMode } from "./components/ViewToggle";
+import UtilityToggle, { UtilityType } from "./components/UtilityToggle";
 import BillSummary from "./components/BillSummary";
-import Recommendations from "./components/Recommendations";
 import MonthlyConsumptionChart from "./components/MonthlyConsumptionChart";
-import { OCRResult, BillData, ChartData } from "./types";
+import { OCRResult, BillData, ChartData, UtilityData } from "./types";
 
 // Dynamic import for the map component to avoid SSR issues
 const SingaporeHeatmap = dynamic(
@@ -28,18 +28,75 @@ function formatBillingPeriod(startDate: string | null, endDate: string | null): 
   return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
-function transformOCRToChartData(ocrResult: OCRResult): ChartData[] {
-  const electricityTrend = ocrResult.form_data.extraction_data.consumption_trends.find(
-    (t) => t.service_type === "Electricity"
+function transformOCRToChartData(ocrResult: OCRResult, utilityType: UtilityType): ChartData[] {
+  const serviceTypeMap: Record<UtilityType, "Electricity" | "Gas" | "Water"> = {
+    electricity: "Electricity",
+    gas: "Gas",
+    water: "Water",
+  };
+
+  const trend = ocrResult.form_data.extraction_data.consumption_trends.find(
+    (t) => t.service_type === serviceTypeMap[utilityType]
   );
 
-  if (!electricityTrend) return [];
+  if (!trend) return [];
 
-  return electricityTrend.monthly_data.map((m) => ({
+  return trend.monthly_data.map((m) => ({
     month: m.month,
     consumption: m.value,
-    average: electricityTrend.national_average,
+    average: trend.national_average,
   }));
+}
+
+function transformOCRToUtilityData(ocrResult: OCRResult, utilityType: UtilityType): UtilityData | null {
+  const data = ocrResult.form_data.extraction_data;
+  const serviceTypeMap: Record<UtilityType, "Electricity" | "Gas" | "Water"> = {
+    electricity: "Electricity",
+    gas: "Gas",
+    water: "Water",
+  };
+
+  const trend = data.consumption_trends.find(
+    (t) => t.service_type === serviceTypeMap[utilityType]
+  );
+
+  const monthlyData = trend?.monthly_data || [];
+  const previousMonthData = monthlyData.length >= 2 ? monthlyData[monthlyData.length - 2] : null;
+
+  if (utilityType === "electricity") {
+    return {
+      currentUsage: data.consumption_kwh || 0,
+      previousUsage: previousMonthData?.value || null,
+      nationalAverage: trend?.national_average || 338,
+      neighbourAverage: trend?.neighbour_average || 300,
+      charges: data.energy_charges || 0,
+      unit: "kWh",
+      trendDirection: trend?.trend_direction || "stable",
+      chartData: transformOCRToChartData(ocrResult, utilityType),
+    };
+  } else if (utilityType === "gas") {
+    return {
+      currentUsage: data.gas_usage_kwh || 0,
+      previousUsage: previousMonthData?.value || null,
+      nationalAverage: trend?.national_average || 50,
+      neighbourAverage: trend?.neighbour_average || 45,
+      charges: data.gas_charges || 0,
+      unit: "kWh",
+      trendDirection: trend?.trend_direction || "stable",
+      chartData: transformOCRToChartData(ocrResult, utilityType),
+    };
+  } else {
+    return {
+      currentUsage: data.water_usage_cu_m || 0,
+      previousUsage: previousMonthData?.value || null,
+      nationalAverage: trend?.national_average || 15,
+      neighbourAverage: trend?.neighbour_average || 14,
+      charges: data.water_charges || 0,
+      unit: "m³",
+      trendDirection: trend?.trend_direction || "stable",
+      chartData: transformOCRToChartData(ocrResult, utilityType),
+    };
+  }
 }
 
 function transformOCRToBillData(ocrResult: OCRResult): BillData {
@@ -74,9 +131,13 @@ function transformOCRToBillData(ocrResult: OCRResult): BillData {
 
 export default function AnalyticsDashboard() {
   const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
+  const [utilityType, setUtilityType] = useState<UtilityType>("electricity");
   const [ocrData, setOcrData] = useState<OCRResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showRecommendations, setShowRecommendations] = useState(false);
+  const [aiRecommendations, setAiRecommendations] = useState<string | null>(null);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
 
   useEffect(() => {
     async function fetchOCRResults() {
@@ -112,12 +173,14 @@ export default function AnalyticsDashboard() {
   }, []);
 
   const billData = ocrData ? transformOCRToBillData(ocrData) : null;
-  const chartData = ocrData ? transformOCRToChartData(ocrData) : [];
+  const utilityData = ocrData ? transformOCRToUtilityData(ocrData, utilityType) : null;
+  const chartData = utilityData?.chartData || [];
 
-  // Calculate stats from the data
-  const currentUsage = billData?.currentUsage || 0;
-  const previousUsage = billData?.previousUsage || currentUsage;
-  const nationalAverage = billData?.nationalAverage || 338;
+  // Calculate stats from the utility-specific data
+  const currentUsage = utilityData?.currentUsage || 0;
+  const previousUsage = utilityData?.previousUsage || currentUsage;
+  const nationalAverage = utilityData?.nationalAverage || 338;
+  const unit = utilityData?.unit || "kWh";
   const usageChange = previousUsage ? ((currentUsage - previousUsage) / previousUsage * 100) : 0;
   const vsNational = nationalAverage ? ((currentUsage - nationalAverage) / nationalAverage * 100) : 0;
 
@@ -127,9 +190,59 @@ export default function AnalyticsDashboard() {
     : 0;
 
   // Estimate potential savings (difference between current and national average)
+  const ratePerUnit = utilityType === "electricity" ? 0.30 : utilityType === "gas" ? 0.25 : 2.74;
   const potentialSavings = currentUsage > nationalAverage
-    ? Math.round((currentUsage - nationalAverage) * 0.30)
+    ? Math.round((currentUsage - nationalAverage) * ratePerUnit)
     : 0;
+
+  // Function to get AI recommendations
+  const getAIRecommendations = async () => {
+    setLoadingRecommendations(true);
+    setShowRecommendations(true);
+    try {
+      // Build context from the OCR data
+      const context = ocrData ? {
+        utilityType,
+        currentUsage,
+        nationalAverage,
+        usageChange,
+        providerName: billData?.providerName,
+        address: billData?.address,
+      } : null;
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Based on my ${utilityType} usage of ${currentUsage} ${unit} (which is ${vsNational.toFixed(1)}% ${vsNational > 0 ? 'above' : 'below'} the national average of ${nationalAverage} ${unit}), please provide:
+1. Specific energy-efficient appliance recommendations available in Singapore
+2. Estimated savings for each recommendation
+3. Any available government vouchers or rebates I can apply for
+4. Quick tips to reduce my ${utilityType} consumption
+
+Please be specific with product names and prices in SGD where possible.`,
+          context,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to get recommendations");
+      const data = await response.json();
+      setAiRecommendations(data.response || data.message);
+    } catch {
+      setAiRecommendations("Unable to load recommendations. Please try again later or visit the chat page for personalized advice.");
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  };
+
+  // Get utility-specific label
+  const getUtilityLabel = () => {
+    switch (utilityType) {
+      case "electricity": return "Electricity";
+      case "gas": return "Gas";
+      case "water": return "Water";
+    }
+  };
 
   if (loading) {
     return (
@@ -208,14 +321,17 @@ export default function AnalyticsDashboard() {
             Track your consumption, compare with others, and discover ways to save
           </p>
         </div>
-        <ViewToggle currentView={viewMode} onChange={setViewMode} />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <UtilityToggle currentUtility={utilityType} onChange={setUtilityType} />
+          <ViewToggle currentView={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
       {/* Quick Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
-          title="This Month"
-          value={`${currentUsage} kWh`}
+          title={`This Month (${getUtilityLabel()})`}
+          value={`${currentUsage} ${unit}`}
           trend={previousUsage ? `${usageChange >= 0 ? "+" : ""}${usageChange.toFixed(1)}% vs last month` : "No previous data"}
           trendDirection={usageChange > 0 ? "up" : usageChange < 0 ? "down" : "neutral"}
           trendColor={usageChange > 0 ? "red" : "green"}
@@ -227,7 +343,7 @@ export default function AnalyticsDashboard() {
         />
         <StatsCard
           title="Monthly Average"
-          value={`${monthlyAverage} kWh`}
+          value={`${monthlyAverage} ${unit}`}
           trend={`Based on ${chartData.length} months`}
           trendDirection="neutral"
           icon={
@@ -239,7 +355,7 @@ export default function AnalyticsDashboard() {
         <StatsCard
           title="vs National Avg"
           value={`${vsNational >= 0 ? "+" : ""}${vsNational.toFixed(0)}%`}
-          trend={`National: ${nationalAverage} kWh`}
+          trend={`National: ${nationalAverage} ${unit}`}
           trendDirection={vsNational > 0 ? "up" : "down"}
           trendColor={vsNational > 0 ? "red" : "green"}
           icon={
@@ -276,18 +392,68 @@ export default function AnalyticsDashboard() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Monthly Consumption</h2>
-                <p className="text-gray-500 text-sm mt-1">Your electricity usage over the past year</p>
+                <p className="text-gray-500 text-sm mt-1">Your {getUtilityLabel().toLowerCase()} usage over the past year</p>
               </div>
             </div>
             <MonthlyConsumptionChart data={chartData} nationalAverage={nationalAverage} />
           </div>
         </div>
 
-        {/* Recommendations - Right Column */}
+        {/* AI Recommendations - Right Column */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">How to Save</h2>
-            <Recommendations />
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Personalized Recommendations</h2>
+
+            {!showRecommendations ? (
+              <div className="text-center py-6">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                </div>
+                <p className="text-gray-600 mb-4">
+                  Get AI-powered recommendations for energy-efficient appliances and government vouchers tailored to your {getUtilityLabel().toLowerCase()} usage.
+                </p>
+                <button
+                  onClick={getAIRecommendations}
+                  className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Get Smart Recommendations
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {loadingRecommendations ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full mx-auto mb-3" />
+                    <p className="text-gray-600 text-sm">Analyzing your usage and finding the best recommendations...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="prose prose-sm max-w-none text-gray-700 max-h-[400px] overflow-y-auto">
+                      <div className="whitespace-pre-wrap">{aiRecommendations}</div>
+                    </div>
+                    <div className="pt-4 border-t border-gray-100 flex gap-2">
+                      <button
+                        onClick={getAIRecommendations}
+                        className="flex-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+                      >
+                        Refresh
+                      </button>
+                      <a
+                        href="/chat"
+                        className="flex-1 px-3 py-2 text-sm bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors text-center"
+                      >
+                        Chat for More
+                      </a>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
