@@ -7,6 +7,8 @@ import Chatbot from "../components/Chatbot";
 import { Navbar } from "../components/navbar";
 import { Footer } from "../components/footer";
 
+import { MessageCircleMore, ChartNoAxesCombined, Sparkles, X } from 'lucide-react';
+
 interface OCRResult {
     text: string;
     box: number[][];
@@ -187,7 +189,7 @@ export default function Upload() {
                                         Processing...
                                     </>
                                 ) : (
-                                    "Extract Text"
+                                    "Extract Information"
                                 )}
                             </button>
                             <button
@@ -201,91 +203,41 @@ export default function Upload() {
 
                     {/* Error Message */}
                     {error && (
-                        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                            <p className="text-red-600">{error}</p>
+                        <div className="mt-6 p-4 bg-red-100 border border-red-200 rounded-lg">
+                            <div className="flex inline-flex gap-2 items-center">
+                                <X className="text-red-600" />
+                                <p className="text-red-600">{error}</p>
+                            </div>
                         </div>
                     )}
 
                     {/* Results */}
                     {results && (
                         <div className="mt-8 space-y-6">
-                            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-                                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                                    <svg
-                                        className="w-6 h-6 text-green-500"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                        />
-                                    </svg>
-                                    Extracted Text
-                                </h2>
-                                <div className="space-y-2">
-                                    {results.extracted_texts.map((text, index) => (
-                                        <div
-                                            key={index}
-                                            className="p-3 bg-gray-50 rounded-lg text-gray-700 font-mono text-sm"
-                                        >
-                                            {text}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-                                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                                    Storage Status
-                                </h2>
-                                <div className="flex items-center gap-3">
-                                    <span
-                                        className={`w-3 h-3 rounded-full ${results.embedding_stored ? "bg-green-500" : "bg-yellow-500"
-                                            }`}
-                                    />
-                                    <span className="text-gray-700">
-                                        {results.embedding_stored
-                                            ? "Embedding stored successfully"
-                                            : "Embedding pending"}
-                                    </span>
-                                </div>
-                                <p className="text-gray-500 text-sm mt-2">
-                                    Source ID: {results.source_id}
-                                </p>
-                            </div>
-
-                            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-                                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                                    Full OCR Response
-                                </h2>
-                                <pre className="text-sm text-gray-600 overflow-x-auto p-4 bg-gray-50 rounded-lg">
-                                    {JSON.stringify(results.ocr_results, null, 2)}
-                                </pre>
-                            </div>
-
                             {/* Next Steps */}
-                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100">
-                                <h3 className="font-semibold text-gray-900 mb-2">What's Next?</h3>
-                                <p className="text-gray-600 mb-4">
+                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-7 border border-emerald-300">
+                                <h3 className="text-xl font-semibold text-gray-900 mb-2 flex items-center gap-2 pb-2">
+                                    <div>
+                                        <Sparkles size={18} className="text-emerald-600" />
+                                    </div>
+                                    What's Next?
+                                </h3>
+                                <p className="text-gray-600 mb-5">
                                     Your bill has been processed! Chat with our AI assistant to get insights
                                     and personalized recommendations.
                                 </p>
-                                <div className="flex gap-4">
+                                <div className="flex flex-col-2 gap-4">
                                     <Link
                                         href="/chat"
-                                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                                        className="flex-1 inline-flex justify-center gap-2 px-4 py-3 bg-green-500 hover:bg-green-800 text-white font-medium rounded-lg transition-colors items-center"
                                     >
-                                        Chat with AI
+                                        <MessageCircleMore size={18} /> Chat with AI Assistant
                                     </Link>
                                     <Link
                                         href="/analytics"
-                                        className="px-4 py-2 bg-white border border-gray-200 hover:border-green-300 text-gray-700 font-medium rounded-lg transition-colors"
+                                        className="flex-1 inline-flex justify-center gap-2 px-4 py-3 bg-white border border-gray-300 hover:border-green-500 text-gray-600 font-medium rounded-lg transition-colors items-center"
                                     >
-                                        View Dashboard
+                                        <ChartNoAxesCombined size={18} /> View Dashboard
                                     </Link>
                                 </div>
                             </div>
