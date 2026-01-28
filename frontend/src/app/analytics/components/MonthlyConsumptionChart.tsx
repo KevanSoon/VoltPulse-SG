@@ -10,22 +10,12 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { ChartData } from "../types";
 
-// Mock monthly consumption data
-const MONTHLY_DATA = [
-  { month: "Jan", consumption: 385, average: 400 },
-  { month: "Feb", consumption: 362, average: 400 },
-  { month: "Mar", consumption: 410, average: 400 },
-  { month: "Apr", consumption: 445, average: 400 },
-  { month: "May", consumption: 478, average: 400 },
-  { month: "Jun", consumption: 520, average: 400 },
-  { month: "Jul", consumption: 535, average: 400 },
-  { month: "Aug", consumption: 498, average: 400 },
-  { month: "Sep", consumption: 456, average: 400 },
-  { month: "Oct", consumption: 412, average: 400 },
-  { month: "Nov", consumption: 378, average: 400 },
-  { month: "Dec", consumption: 395, average: 400 },
-];
+interface MonthlyConsumptionChartProps {
+  data: ChartData[];
+  nationalAverage: number;
+}
 
 function getBarColor(consumption: number, average: number): string {
   if (consumption <= average * 0.9) return "#22c55e"; // green - good
@@ -63,19 +53,27 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   return null;
 }
 
-export default function MonthlyConsumptionChart() {
+export default function MonthlyConsumptionChart({ data, nationalAverage }: MonthlyConsumptionChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <p>No consumption data available</p>
+      </div>
+    );
+  }
+
   // Calculate yearly stats
-  const totalConsumption = MONTHLY_DATA.reduce((sum, d) => sum + d.consumption, 0);
-  const avgMonthly = Math.round(totalConsumption / 12);
-  const highestMonth = MONTHLY_DATA.reduce((max, d) => d.consumption > max.consumption ? d : max);
-  const lowestMonth = MONTHLY_DATA.reduce((min, d) => d.consumption < min.consumption ? d : min);
+  const totalConsumption = data.reduce((sum, d) => sum + d.consumption, 0);
+  const avgMonthly = Math.round(totalConsumption / data.length);
+  const highestMonth = data.reduce((max, d) => d.consumption > max.consumption ? d : max);
+  const lowestMonth = data.reduce((min, d) => d.consumption < min.consumption ? d : min);
 
   return (
     <div className="space-y-4">
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
-            data={MONTHLY_DATA}
+            data={data}
             margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -97,7 +95,7 @@ export default function MonthlyConsumptionChart() {
             />
             <Tooltip content={<CustomTooltip />} />
             <ReferenceLine
-              y={400}
+              y={nationalAverage}
               stroke="#9ca3af"
               strokeDasharray="5 5"
               label={{ value: "Avg", position: "right", fill: "#9ca3af", fontSize: 11 }}
@@ -143,7 +141,7 @@ export default function MonthlyConsumptionChart() {
         </div>
         <div className="flex items-center gap-1">
           <div className="w-3 h-0.5 bg-gray-400" style={{ borderStyle: "dashed" }} />
-          <span>National Avg (400 kWh)</span>
+          <span>National Avg ({nationalAverage} kWh)</span>
         </div>
       </div>
 

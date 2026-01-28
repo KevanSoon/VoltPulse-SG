@@ -2,12 +2,13 @@
 
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Chatbot from "../components/Chatbot";
 import { Navbar } from "../components/navbar";
 import { Footer } from "../components/footer";
 
-import { MessageCircleMore, ChartNoAxesCombined, Sparkles, X } from 'lucide-react';
+import { MessageCircleMore, ChartNoAxesCombined, Sparkles, X, CheckCircle } from 'lucide-react';
 
 interface OCRResult {
     text: string;
@@ -22,11 +23,13 @@ interface OCRResponse {
 }
 
 export default function Upload() {
+    const router = useRouter();
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<OCRResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [redirecting, setRedirecting] = useState(false);
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         const selectedFile = acceptedFiles[0];
@@ -68,6 +71,17 @@ export default function Upload() {
 
             const data: OCRResponse = await response.json();
             setResults(data);
+
+            // Store the source_id in localStorage for the analytics page
+            if (data.source_id) {
+                localStorage.setItem("ocr_source_id", data.source_id);
+            }
+
+            // Show success briefly then redirect to analytics
+            setRedirecting(true);
+            setTimeout(() => {
+                router.push("/analytics");
+            }, 1500);
         } catch (err) {
             setError(err instanceof Error ? err.message : "An error occurred");
         } finally {
@@ -214,31 +228,47 @@ export default function Upload() {
                     {/* Results */}
                     {results && (
                         <div className="mt-8 space-y-6">
-                            {/* Next Steps */}
+                            {/* Success & Redirect Message */}
                             <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-7 border border-emerald-300">
-                                <h3 className="text-xl font-semibold text-gray-900 mb-2 flex items-center gap-2 pb-2">
-                                    <div>
-                                        <Sparkles size={18} className="text-emerald-600" />
+                                <div className="text-center">
+                                    <div className="flex justify-center mb-4">
+                                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                                            <CheckCircle size={32} className="text-green-600" />
+                                        </div>
                                     </div>
-                                    What's Next?
-                                </h3>
-                                <p className="text-gray-600 mb-5">
-                                    Your bill has been processed! Chat with our AI assistant to get insights
-                                    and personalized recommendations.
-                                </p>
-                                <div className="flex flex-col-2 gap-4">
-                                    <Link
-                                        href="/chat"
-                                        className="flex-1 inline-flex justify-center gap-2 px-4 py-3 bg-green-500 hover:bg-green-800 text-white font-medium rounded-lg transition-colors items-center"
-                                    >
-                                        <MessageCircleMore size={18} /> Chat with AI Assistant
-                                    </Link>
-                                    <Link
-                                        href="/analytics"
-                                        className="flex-1 inline-flex justify-center gap-2 px-4 py-3 bg-white border border-gray-300 hover:border-green-500 text-gray-600 font-medium rounded-lg transition-colors items-center"
-                                    >
-                                        <ChartNoAxesCombined size={18} /> View Dashboard
-                                    </Link>
+                                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                                        Bill Processed Successfully!
+                                    </h3>
+                                    {redirecting ? (
+                                        <div className="space-y-3">
+                                            <p className="text-gray-600">
+                                                Redirecting to your dashboard...
+                                            </p>
+                                            <div className="flex justify-center">
+                                                <div className="animate-spin w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full" />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            <p className="text-gray-600">
+                                                Your bill data has been extracted and saved.
+                                            </p>
+                                            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                                                <Link
+                                                    href="/analytics"
+                                                    className="inline-flex justify-center gap-2 px-6 py-3 bg-green-500 hover:bg-green-700 text-white font-medium rounded-lg transition-colors items-center"
+                                                >
+                                                    <ChartNoAxesCombined size={18} /> View Dashboard
+                                                </Link>
+                                                <Link
+                                                    href="/chat"
+                                                    className="inline-flex justify-center gap-2 px-6 py-3 bg-white border border-gray-300 hover:border-green-500 text-gray-600 font-medium rounded-lg transition-colors items-center"
+                                                >
+                                                    <MessageCircleMore size={18} /> Chat with AI
+                                                </Link>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

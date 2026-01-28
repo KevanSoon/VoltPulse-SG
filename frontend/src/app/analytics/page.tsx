@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import StatsCard from "./components/StatsCard";
 import DateRangeFilter from "./components/DateRangeFilter";
 import BillSummary from "./components/BillSummary";
 import Recommendations from "./components/Recommendations";
 import MonthlyConsumptionChart from "./components/MonthlyConsumptionChart";
+import { OCRResult, BillData, ChartData } from "./types";
 
 // Dynamic import for the map component to avoid SSR issues
 const SingaporeHeatmap = dynamic(
@@ -21,8 +22,144 @@ const SingaporeHeatmap = dynamic(
   }
 );
 
+function formatBillingPeriod(startDate: string | null, endDate: string | null): string {
+  if (!endDate) return "Current Period";
+  const date = new Date(endDate);
+  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+function transformOCRToChartData(ocrResult: OCRResult): ChartData[] {
+  const electricityTrend = ocrResult.form_data.extraction_data.consumption_trends.find(
+    (t) => t.service_type === "Electricity"
+  );
+
+  if (!electricityTrend) return [];
+
+  return electricityTrend.monthly_data.map((m) => ({
+    month: m.month,
+    consumption: m.value,
+    average: electricityTrend.national_average,
+  }));
+}
+
+function transformOCRToBillData(ocrResult: OCRResult): BillData {
+  const data = ocrResult.form_data.extraction_data;
+  const electricityTrend = data.consumption_trends.find((t) => t.service_type === "Electricity");
+
+  // Get previous month's consumption from trend data
+  const monthlyData = electricityTrend?.monthly_data || [];
+  const previousMonthData = monthlyData.length >= 2 ? monthlyData[monthlyData.length - 2] : null;
+
+  return {
+    currentBill: data.total_amount || 0,
+    previousBill: null,
+    currentUsage: data.consumption_kwh || 0,
+    previousUsage: previousMonthData?.value || null,
+    nationalAverage: electricityTrend?.national_average || 338,
+    neighbourAverage: electricityTrend?.neighbour_average || 300,
+    billingPeriod: formatBillingPeriod(data.billing_period_start, data.billing_period_end),
+    accountNumber: data.account_number ? `****${data.account_number.slice(-4)}` : "N/A",
+    tariffRate: data.energy_charges && data.consumption_kwh
+      ? data.energy_charges / data.consumption_kwh
+      : null,
+    gasUsage: data.gas_usage_kwh,
+    gasCharges: data.gas_charges,
+    waterUsage: data.water_usage_cu_m,
+    waterCharges: data.water_charges,
+    customerName: data.customer_name,
+    address: data.premise_address,
+    providerName: data.provider_name,
+  };
+}
+
 export default function AnalyticsDashboard() {
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date } | null>(null);
+  const [ocrData, setOcrData] = useState<OCRResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchOCRResults() {
+      try {
+        setLoading(true);
+
+        // Get the source_id from localStorage (set by the upload page)
+        const sourceId = localStorage.getItem("ocr_source_id");
+
+        if (!sourceId) {
+          throw new Error("No bill data found. Please upload a bill first.");
+        }
+
+        const response = await fetch(`/api/ocr/results/${sourceId}`);
+        if (!response.ok) {
+          if (response.status === 404) {
+            // Clear invalid source_id
+            localStorage.removeItem("ocr_source_id");
+            throw new Error("Bill data not found. Please upload a new bill.");
+          }
+          throw new Error("Failed to fetch OCR results");
+        }
+        const data = await response.json();
+        setOcrData(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchOCRResults();
+  }, []);
+
+  const billData = ocrData ? transformOCRToBillData(ocrData) : null;
+  const chartData = ocrData ? transformOCRToChartData(ocrData) : [];
+
+  // Calculate stats from the data
+  const currentUsage = billData?.currentUsage || 0;
+  const previousUsage = billData?.previousUsage || currentUsage;
+  const nationalAverage = billData?.nationalAverage || 338;
+  const usageChange = previousUsage ? ((currentUsage - previousUsage) / previousUsage * 100) : 0;
+  const vsNational = nationalAverage ? ((currentUsage - nationalAverage) / nationalAverage * 100) : 0;
+
+  // Calculate monthly average from chart data
+  const monthlyAverage = chartData.length > 0
+    ? Math.round(chartData.reduce((sum, d) => sum + d.consumption, 0) / chartData.length)
+    : 0;
+
+  // Estimate potential savings (difference between current and national average)
+  const potentialSavings = currentUsage > nationalAverage
+    ? Math.round((currentUsage - nationalAverage) * 0.30)
+    : 0;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full mx-auto" />
+          <p className="mt-4 text-gray-600">Loading your energy data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <p className="mt-4 text-gray-900 font-medium">Unable to load data</p>
+          <p className="mt-2 text-gray-600">{error}</p>
+          <a href="/upload" className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+            Upload a Bill
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -41,10 +178,10 @@ export default function AnalyticsDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
           title="This Month"
-          value="520 kWh"
-          trend="+9.5% vs last month"
-          trendDirection="up"
-          trendColor="red"
+          value={`${currentUsage} kWh`}
+          trend={previousUsage ? `${usageChange >= 0 ? "+" : ""}${usageChange.toFixed(1)}% vs last month` : "No previous data"}
+          trendDirection={usageChange > 0 ? "up" : usageChange < 0 ? "down" : "neutral"}
+          trendColor={usageChange > 0 ? "red" : "green"}
           icon={
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -53,8 +190,8 @@ export default function AnalyticsDashboard() {
         />
         <StatsCard
           title="Monthly Average"
-          value="456 kWh"
-          trend="Based on 12 months"
+          value={`${monthlyAverage} kWh`}
+          trend={`Based on ${chartData.length} months`}
           trendDirection="neutral"
           icon={
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -64,10 +201,10 @@ export default function AnalyticsDashboard() {
         />
         <StatsCard
           title="vs National Avg"
-          value="+30%"
-          trend="National: 400 kWh"
-          trendDirection="up"
-          trendColor="red"
+          value={`${vsNational >= 0 ? "+" : ""}${vsNational.toFixed(0)}%`}
+          trend={`National: ${nationalAverage} kWh`}
+          trendDirection={vsNational > 0 ? "up" : "down"}
+          trendColor={vsNational > 0 ? "red" : "green"}
           icon={
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -76,8 +213,8 @@ export default function AnalyticsDashboard() {
         />
         <StatsCard
           title="Potential Savings"
-          value="S$45/mo"
-          trend="With recommended changes"
+          value={potentialSavings > 0 ? `S$${potentialSavings}/mo` : "On track!"}
+          trend={potentialSavings > 0 ? "With recommended changes" : "Below national average"}
           trendDirection="down"
           trendColor="green"
           icon={
@@ -94,7 +231,7 @@ export default function AnalyticsDashboard() {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-xl p-6 border border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Bill Summary</h2>
-            <BillSummary />
+            <BillSummary data={billData} />
           </div>
 
           {/* Monthly Consumption Chart */}
@@ -105,7 +242,7 @@ export default function AnalyticsDashboard() {
                 <p className="text-gray-500 text-sm mt-1">Your electricity usage over the past year</p>
               </div>
             </div>
-            <MonthlyConsumptionChart />
+            <MonthlyConsumptionChart data={chartData} nationalAverage={nationalAverage} />
           </div>
         </div>
 

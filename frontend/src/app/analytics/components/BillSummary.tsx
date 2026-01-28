@@ -1,18 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { BillData } from "../types";
 
-// Mock bill data - in production, this would come from the uploaded bill
-const BILL_DATA = {
-  currentBill: 156.80,
-  previousBill: 142.50,
-  currentUsage: 520,
-  previousUsage: 475,
-  nationalAverage: 400,
-  billingPeriod: "Dec 2024",
-  accountNumber: "****4521",
-  tariffRate: 0.3016,
-};
+interface BillSummaryProps {
+  data: BillData | null;
+}
 
 function ComparisonBar({
   value,
@@ -42,11 +35,24 @@ function ComparisonBar({
   );
 }
 
-export default function BillSummary() {
-  const usageChange = BILL_DATA.currentUsage - BILL_DATA.previousUsage;
-  const usageChangePercent = ((usageChange / BILL_DATA.previousUsage) * 100).toFixed(1);
-  const vsNational = BILL_DATA.currentUsage - BILL_DATA.nationalAverage;
-  const vsNationalPercent = ((vsNational / BILL_DATA.nationalAverage) * 100).toFixed(1);
+export default function BillSummary({ data }: BillSummaryProps) {
+  if (!data) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <p>No bill data available</p>
+        <Link href="/upload" className="text-green-600 hover:text-green-700 mt-2 inline-block">
+          Upload a bill to see your summary
+        </Link>
+      </div>
+    );
+  }
+
+  const usageChange = data.previousUsage ? data.currentUsage - data.previousUsage : 0;
+  const usageChangePercent = data.previousUsage
+    ? ((usageChange / data.previousUsage) * 100).toFixed(1)
+    : "0";
+  const vsNational = data.currentUsage - data.nationalAverage;
+  const vsNationalPercent = ((vsNational / data.nationalAverage) * 100).toFixed(1);
 
   return (
     <div className="space-y-6">
@@ -54,36 +60,40 @@ export default function BillSummary() {
       <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-sm text-gray-500">Current Bill - {BILL_DATA.billingPeriod}</p>
-            <p className="text-3xl font-bold text-gray-900">S${BILL_DATA.currentBill.toFixed(2)}</p>
+            <p className="text-sm text-gray-500">Current Bill - {data.billingPeriod}</p>
+            <p className="text-3xl font-bold text-gray-900">S${data.currentBill.toFixed(2)}</p>
           </div>
           <div className="text-right">
             <p className="text-sm text-gray-500">Usage</p>
-            <p className="text-2xl font-bold text-gray-900">{BILL_DATA.currentUsage} kWh</p>
+            <p className="text-2xl font-bold text-gray-900">{data.currentUsage} kWh</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-sm">
-          {usageChange > 0 ? (
-            <>
-              <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
-              <span className="text-red-600 font-medium">
-                +{usageChange} kWh (+{usageChangePercent}%) vs last month
-              </span>
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-              <span className="text-green-600 font-medium">
-                {usageChange} kWh ({usageChangePercent}%) vs last month
-              </span>
-            </>
-          )}
-        </div>
+        {data.previousUsage ? (
+          <div className="flex items-center gap-2 text-sm">
+            {usageChange > 0 ? (
+              <>
+                <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+                <span className="text-red-600 font-medium">
+                  +{usageChange} kWh (+{usageChangePercent}%) vs last month
+                </span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                <span className="text-green-600 font-medium">
+                  {usageChange} kWh ({usageChangePercent}%) vs last month
+                </span>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="text-sm text-gray-500">First bill - no previous data</div>
+        )}
       </div>
 
       {/* Comparison */}
@@ -91,14 +101,20 @@ export default function BillSummary() {
         <h3 className="font-semibold text-gray-900 mb-4">How You Compare</h3>
         <div className="space-y-4">
           <ComparisonBar
-            value={BILL_DATA.currentUsage}
-            maxValue={600}
+            value={data.currentUsage}
+            maxValue={Math.max(data.currentUsage, data.nationalAverage, data.neighbourAverage) * 1.2}
             label="Your Usage"
             color="bg-blue-500"
           />
           <ComparisonBar
-            value={BILL_DATA.nationalAverage}
-            maxValue={600}
+            value={data.neighbourAverage}
+            maxValue={Math.max(data.currentUsage, data.nationalAverage, data.neighbourAverage) * 1.2}
+            label="Neighbour Average"
+            color="bg-yellow-500"
+          />
+          <ComparisonBar
+            value={data.nationalAverage}
+            maxValue={Math.max(data.currentUsage, data.nationalAverage, data.neighbourAverage) * 1.2}
             label="National Average"
             color="bg-gray-400"
           />
@@ -108,7 +124,7 @@ export default function BillSummary() {
           <p className={`text-sm font-medium ${vsNational > 0 ? "text-red-700" : "text-green-700"}`}>
             {vsNational > 0
               ? `You're using ${vsNational} kWh (+${vsNationalPercent}%) more than the national average`
-              : `You're using ${Math.abs(vsNational)} kWh (${vsNationalPercent}%) less than the national average`
+              : `You're using ${Math.abs(vsNational)} kWh (${Math.abs(Number(vsNationalPercent))}%) less than the national average`
             }
           </p>
         </div>
