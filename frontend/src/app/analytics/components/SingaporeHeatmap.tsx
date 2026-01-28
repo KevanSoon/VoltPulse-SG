@@ -35,6 +35,7 @@ const SINGAPORE_CONSUMPTION_DATA = [
 
 interface HeatmapProps {
   dateRange?: { start: Date; end: Date } | null;
+  fullHeight?: boolean;
 }
 
 // Dynamic import for Leaflet components to avoid SSR issues
@@ -96,7 +97,7 @@ function getConsumptionRadius(consumption: number): number {
   return Math.min(25, Math.max(8, consumption / 40));
 }
 
-export default function SingaporeHeatmap({ dateRange }: HeatmapProps) {
+export default function SingaporeHeatmap({ dateRange, fullHeight = false }: HeatmapProps) {
   const [mounted, setMounted] = useState(false);
   const [selectedDistrict, setSelectedDistrict] = useState<typeof SINGAPORE_CONSUMPTION_DATA[0] | null>(null);
 
@@ -106,7 +107,7 @@ export default function SingaporeHeatmap({ dateRange }: HeatmapProps) {
 
   if (!mounted) {
     return (
-      <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">
+      <div className={`${fullHeight ? "h-full" : "h-[400px]"} bg-gray-100 rounded-lg flex items-center justify-center`}>
         <div className="animate-spin w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full" />
       </div>
     );
@@ -119,53 +120,69 @@ export default function SingaporeHeatmap({ dateRange }: HeatmapProps) {
   const maxConsumption = Math.max(...SINGAPORE_CONSUMPTION_DATA.map(d => d.consumption));
   const minConsumption = Math.min(...SINGAPORE_CONSUMPTION_DATA.map(d => d.consumption));
 
+  const mapContent = (
+    <>
+      <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossOrigin=""
+      />
+      <MapContainer
+        center={[1.3521, 103.8198]}
+        zoom={11}
+        style={{ height: "100%", width: "100%" }}
+        scrollWheelZoom={true}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {SINGAPORE_CONSUMPTION_DATA.map((location) => (
+          <CircleMarker
+            key={location.district}
+            center={[location.lat, location.lng]}
+            radius={getConsumptionRadius(location.consumption)}
+            pathOptions={{
+              fillColor: getConsumptionColor(location.consumption),
+              fillOpacity: 0.7,
+              color: getConsumptionColor(location.consumption),
+              weight: 2,
+            }}
+            eventHandlers={{
+              click: () => setSelectedDistrict(location),
+            }}
+          >
+            <Popup>
+              <div className="text-sm">
+                <p className="font-semibold text-gray-900">{location.name}</p>
+                <p className="text-gray-600">District {location.district}</p>
+                <p className="text-gray-900 font-medium mt-1">
+                  {location.consumption} kWh/month
+                </p>
+              </div>
+            </Popup>
+          </CircleMarker>
+        ))}
+      </MapContainer>
+      <HeatmapLegend />
+    </>
+  );
+
+  // Full height mode - just the map filling the container
+  if (fullHeight) {
+    return (
+      <div className="relative h-full rounded-lg overflow-hidden border border-gray-200">
+        {mapContent}
+      </div>
+    );
+  }
+
+  // Normal mode with stats below
   return (
     <div className="space-y-4">
       <div className="relative h-[400px] rounded-lg overflow-hidden border border-gray-200">
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-          crossOrigin=""
-        />
-        <MapContainer
-          center={[1.3521, 103.8198]}
-          zoom={11}
-          style={{ height: "100%", width: "100%" }}
-          scrollWheelZoom={true}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          {SINGAPORE_CONSUMPTION_DATA.map((location) => (
-            <CircleMarker
-              key={location.district}
-              center={[location.lat, location.lng]}
-              radius={getConsumptionRadius(location.consumption)}
-              pathOptions={{
-                fillColor: getConsumptionColor(location.consumption),
-                fillOpacity: 0.7,
-                color: getConsumptionColor(location.consumption),
-                weight: 2,
-              }}
-              eventHandlers={{
-                click: () => setSelectedDistrict(location),
-              }}
-            >
-              <Popup>
-                <div className="text-sm">
-                  <p className="font-semibold text-gray-900">{location.name}</p>
-                  <p className="text-gray-600">District {location.district}</p>
-                  <p className="text-gray-900 font-medium mt-1">
-                    {location.consumption} kWh/month
-                  </p>
-                </div>
-              </Popup>
-            </CircleMarker>
-          ))}
-        </MapContainer>
-        <HeatmapLegend />
+        {mapContent}
       </div>
 
       {/* Summary Stats */}

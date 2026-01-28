@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import StatsCard from "./components/StatsCard";
-import DateRangeFilter from "./components/DateRangeFilter";
+import ViewToggle, { ViewMode } from "./components/ViewToggle";
 import BillSummary from "./components/BillSummary";
 import Recommendations from "./components/Recommendations";
 import MonthlyConsumptionChart from "./components/MonthlyConsumptionChart";
@@ -73,7 +73,7 @@ function transformOCRToBillData(ocrResult: OCRResult): BillData {
 }
 
 export default function AnalyticsDashboard() {
-  const [dateRange, setDateRange] = useState<{ start: Date; end: Date } | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
   const [ocrData, setOcrData] = useState<OCRResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -161,6 +161,43 @@ export default function AnalyticsDashboard() {
     );
   }
 
+  // Heatmap View
+  if (viewMode === "heatmap") {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Singapore Energy Heatmap</h1>
+            <p className="text-gray-600 mt-1">
+              Explore energy consumption patterns across Singapore districts
+            </p>
+          </div>
+          <ViewToggle currentView={viewMode} onChange={setViewMode} />
+        </div>
+
+        {/* Full-screen Heatmap */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Consumption by District</h2>
+              <p className="text-gray-500 text-sm mt-1">
+                See how your area compares to other districts in Singapore
+              </p>
+            </div>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+              Click markers for details
+            </span>
+          </div>
+          <div className="h-[600px]">
+            <SingaporeHeatmap dateRange={null} fullHeight />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Dashboard View
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -171,7 +208,7 @@ export default function AnalyticsDashboard() {
             Track your consumption, compare with others, and discover ways to save
           </p>
         </div>
-        <DateRangeFilter onChange={setDateRange} />
+        <ViewToggle currentView={viewMode} onChange={setViewMode} />
       </div>
 
       {/* Quick Stats Row */}
@@ -253,22 +290,6 @@ export default function AnalyticsDashboard() {
             <Recommendations />
           </div>
         </div>
-      </div>
-
-      {/* Singapore Heatmap - Full Width */}
-      <div className="bg-white rounded-xl p-6 border border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Consumption by District</h2>
-            <p className="text-gray-500 text-sm mt-1">
-              See how your area compares to other districts in Singapore
-            </p>
-          </div>
-          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
-            Click markers for details
-          </span>
-        </div>
-        <SingaporeHeatmap dateRange={dateRange} />
       </div>
 
       {/* Help Section */}
