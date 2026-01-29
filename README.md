@@ -213,9 +213,10 @@ Ensure all environment variables are set as secrets in your deployment platform.
 
 | Name | Role |
 |------|------|
-| **Zulfa** | Full-Stack Developer |
-| *Add team members here* | |
-
+| **Zulfaqar Hafez** | AI Developer |
+| **Kevan Soon** | Full-Stack Developer |
+| **Rahul Mitra** | Full-Stack Developer |
+| **Kwa Guang Hao** | Full-Stack Developer |
 ---
 
 ## Additional Notes
