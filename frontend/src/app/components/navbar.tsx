@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Menu, X, Zap, BarChart3, MessageSquare, Upload } from "lucide-react";
+import { Menu, X, BarChart3, MessageSquare, Upload } from "lucide-react";
 
 interface NavItem {
   href: string;
@@ -63,9 +64,15 @@ export function Navbar() {
             className="flex items-center gap-2.5 hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-teal-700 rounded-lg"
             aria-label="VoltPulse - Go to homepage"
           >
-            <div className="bg-white/20 p-1.5 rounded-lg">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
+            <Image
+              src="/volt.png"
+              alt="VoltPulse Logo"
+              width={32}
+              height={32}
+              className="rounded-lg"
+              priority
+              unoptimized
+            />
             <span className="text-lg font-semibold text-white tracking-tight">VoltPulse</span>
           </Link>
 

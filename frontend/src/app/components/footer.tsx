@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Zap, ExternalLink, Github } from "lucide-react";
+import Image from "next/image";
+import { ExternalLink, Github } from "lucide-react";
 
 export function Footer() {
     // Use a static year to avoid hydration mismatch between server and client
@@ -116,9 +117,14 @@ export function Footer() {
                 {/* Bottom bar */}
                 <div className="pt-8 border-t border-teal-700 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div className="flex items-center gap-2">
-                        <div className="bg-white/20 p-1 rounded">
-                            <Zap className="w-4 h-4 text-white" />
-                        </div>
+                        <Image
+                            src="/volt.png"
+                            alt="VoltPulse Logo"
+                            width={24}
+                            height={24}
+                            className="rounded"
+                            unoptimized
+                        />
                         <span className="text-sm font-medium text-white">VoltPulse</span>
                     </div>
                     <p className="text-sm text-teal-300">

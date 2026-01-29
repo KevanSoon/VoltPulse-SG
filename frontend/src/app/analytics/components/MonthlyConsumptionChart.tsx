@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import {
   BarChart,
   Bar,
@@ -53,8 +54,20 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   return null;
 }
 
-export default function MonthlyConsumptionChart({ data, nationalAverage }: MonthlyConsumptionChartProps) {
-  if (!data || data.length === 0) {
+function MonthlyConsumptionChartComponent({ data, nationalAverage }: MonthlyConsumptionChartProps) {
+  // Memoize expensive calculations
+  const stats = useMemo(() => {
+    if (!data || data.length === 0) return null;
+    const totalConsumption = data.reduce((sum, d) => sum + d.consumption, 0);
+    return {
+      totalConsumption,
+      avgMonthly: Math.round(totalConsumption / data.length),
+      highestMonth: data.reduce((max, d) => d.consumption > max.consumption ? d : max),
+      lowestMonth: data.reduce((min, d) => d.consumption < min.consumption ? d : min),
+    };
+  }, [data]);
+
+  if (!data || data.length === 0 || !stats) {
     return (
       <div className="text-center py-8 text-gray-500">
         <p>No consumption data available</p>
@@ -62,11 +75,7 @@ export default function MonthlyConsumptionChart({ data, nationalAverage }: Month
     );
   }
 
-  // Calculate yearly stats
-  const totalConsumption = data.reduce((sum, d) => sum + d.consumption, 0);
-  const avgMonthly = Math.round(totalConsumption / data.length);
-  const highestMonth = data.reduce((max, d) => d.consumption > max.consumption ? d : max);
-  const lowestMonth = data.reduce((min, d) => d.consumption < min.consumption ? d : min);
+  const { totalConsumption, highestMonth, lowestMonth } = stats;
 
   return (
     <div className="space-y-4">
@@ -165,3 +174,7 @@ export default function MonthlyConsumptionChart({ data, nationalAverage }: Month
     </div>
   );
 }
+
+// Memoize to prevent unnecessary re-renders
+const MonthlyConsumptionChart = memo(MonthlyConsumptionChartComponent);
+export default MonthlyConsumptionChart;

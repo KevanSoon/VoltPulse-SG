@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ThumbsUp, ThumbsDown, Copy, Share2, RotateCcw, Sparkles } from "lucide-react";
@@ -165,9 +166,14 @@ export default function Chatbot({ userId = "default_user", threadId = "default_t
           <div className="bg-gradient-to-r from-teal-600 to-teal-700 px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-amber-400 rounded-full flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-teal-700" />
-                </div>
+                <Image
+                  src="/volt.png"
+                  alt="VoltPulse Logo"
+                  width={40}
+                  height={40}
+                  className="rounded-full"
+                  unoptimized
+                />
                 <div>
                   <h3 className="text-white font-semibold">VoltPulse Assistant</h3>
                   <p className="text-teal-100 text-xs">AI-powered energy advisor</p>

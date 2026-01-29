@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
@@ -279,11 +280,14 @@ function ChatContent() {
           <Breadcrumb items={breadcrumbItems} />
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
+              <Image
+                src="/volt.png"
+                alt="VoltPulse Logo"
+                width={40}
+                height={40}
+                className="rounded-full"
+                unoptimized
+              />
               <div>
                 <h1 className="text-gray-900 font-semibold text-lg">VoltPulse Assistant</h1>
                 <div className="flex items-center gap-2 text-gray-500 text-sm">
