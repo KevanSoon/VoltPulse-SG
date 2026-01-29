@@ -20,9 +20,9 @@ export default function StatsCard({
   subtitle,
 }: StatsCardProps) {
   const getTrendColor = () => {
-    if (trendColor === "green") return "text-green-600";
+    if (trendColor === "green") return "text-teal-600";
     if (trendColor === "red") return "text-red-600";
-    if (trendDirection === "up") return "text-green-600";
+    if (trendDirection === "up") return "text-teal-600";
     if (trendDirection === "down") return "text-red-600";
     return "text-gray-500";
   };
@@ -66,7 +66,7 @@ export default function StatsCard({
   };
 
   return (
-    <div className="bg-white rounded-xl p-5 border border-gray-200 hover:border-green-300 hover:shadow-md transition-all">
+    <div className="bg-white rounded-xl p-5 border border-gray-200 hover:border-teal-300 hover:shadow-md transition-all">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <p className="text-gray-500 text-sm font-medium">{title}</p>
@@ -76,7 +76,7 @@ export default function StatsCard({
           )}
         </div>
         {icon && (
-          <div className="text-green-600 bg-green-50 p-2 rounded-lg">
+          <div className="text-teal-600 bg-teal-50 p-2 rounded-lg">
             {icon}
           </div>
         )}

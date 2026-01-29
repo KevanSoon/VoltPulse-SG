@@ -124,7 +124,7 @@ export default function AnomalyTable({
     return (
       <div className="animate-pulse space-y-3">
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-12 bg-gray-700 rounded" />
+          <div key={i} className="h-12 bg-slate-200 rounded" />
         ))}
       </div>
     );
@@ -132,9 +132,9 @@ export default function AnomalyTable({
 
   if (anomalies.length === 0) {
     return (
-      <div className="text-center text-gray-400 py-8">
+      <div className="text-center text-slate-500 py-8">
         <svg
-          className="w-12 h-12 mx-auto mb-3 text-gray-600"
+          className="w-12 h-12 mx-auto mb-3 text-teal-400"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -147,7 +147,7 @@ export default function AnomalyTable({
           />
         </svg>
         <p>No anomalies detected</p>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-slate-400 mt-1">
           All consumption within normal range
         </p>
       </div>
@@ -158,15 +158,15 @@ export default function AnomalyTable({
     <div>
       {/* Sort controls */}
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-gray-400 text-xs">Sort by:</span>
+        <span className="text-slate-500 text-xs">Sort by:</span>
         {(["z_score", "p_value", "consumption"] as const).map((option) => (
           <button
             key={option}
             onClick={() => setSortBy(option)}
             className={`px-2 py-1 text-xs rounded transition-colors ${
               sortBy === option
-                ? "bg-blue-600 text-white"
-                : "bg-gray-700 text-gray-400 hover:text-white"
+                ? "bg-teal-600 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800"
             }`}
           >
             {option === "z_score"
@@ -182,7 +182,7 @@ export default function AnomalyTable({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-700">
+            <tr className="text-left text-slate-600 border-b border-slate-200">
               <th className="pb-3 font-medium">Account</th>
               <th className="pb-3 font-medium">Type</th>
               <th className="pb-3 font-medium">Consumption</th>
@@ -191,11 +191,11 @@ export default function AnomalyTable({
               <th className="pb-3 font-medium">Status</th>
             </tr>
           </thead>
-          <tbody className="text-gray-300">
+          <tbody className="text-slate-700">
             {sortedAnomalies.map((anomaly, idx) => (
               <tr
                 key={`${anomaly.account_number}-${idx}`}
-                className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors"
+                className="border-b border-slate-200 hover:bg-teal-50/50 transition-colors"
               >
                 <td className="py-3">
                   <div className="font-mono text-xs">
@@ -221,7 +221,7 @@ export default function AnomalyTable({
                 <td className="py-3">
                   <span
                     className={`font-mono ${
-                      anomaly.z_score > 0 ? "text-red-400" : "text-blue-400"
+                      anomaly.z_score > 0 ? "text-red-500" : "text-blue-500"
                     }`}
                   >
                     {anomaly.z_score > 0 ? "+" : ""}
@@ -233,18 +233,18 @@ export default function AnomalyTable({
                     {formatPValue(anomaly.p_value)}
                   </span>
                   {anomaly.p_value < 0.01 && (
-                    <span className="text-yellow-400 ml-1">*</span>
+                    <span className="text-amber-500 ml-1">*</span>
                   )}
                   {anomaly.p_value < 0.001 && (
-                    <span className="text-yellow-400">*</span>
+                    <span className="text-amber-500">*</span>
                   )}
                 </td>
                 <td className="py-3">
                   <span
                     className={`px-2 py-1 rounded text-xs font-medium ${
                       anomaly.anomaly_type === "HIGH"
-                        ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                        : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                        ? "bg-red-100 text-red-600 border border-red-200"
+                        : "bg-blue-100 text-blue-600 border border-blue-200"
                     }`}
                   >
                     {anomaly.anomaly_type}
@@ -257,9 +257,9 @@ export default function AnomalyTable({
       </div>
 
       {/* Footer note */}
-      <div className="mt-3 text-xs text-gray-500">
-        <span className="text-yellow-400">*</span> p &lt; 0.01,{" "}
-        <span className="text-yellow-400">**</span> p &lt; 0.001 | Anomalies
+      <div className="mt-3 text-xs text-slate-500">
+        <span className="text-amber-500">*</span> p &lt; 0.01,{" "}
+        <span className="text-amber-500">**</span> p &lt; 0.001 | Anomalies
         flagged at 95% CI (|z| &gt; 1.96)
       </div>
     </div>

@@ -74,7 +74,7 @@ const VOUCHERS = [
 
 function DifficultyBadge({ difficulty }: { difficulty: string }) {
   const colors = {
-    Easy: "bg-green-100 text-green-700",
+    Easy: "bg-teal-100 text-teal-700",
     Medium: "bg-yellow-100 text-yellow-700",
     Hard: "bg-red-100 text-red-700",
   };
@@ -100,7 +100,7 @@ export default function Recommendations() {
           {RECOMMENDATIONS.slice(0, 4).map((rec) => (
             <div
               key={rec.id}
-              className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-green-300 hover:shadow-sm transition-all"
+              className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-teal-300 hover:shadow-sm transition-all"
             >
               <div className="text-2xl">{rec.icon}</div>
               <div className="flex-1">
@@ -109,7 +109,7 @@ export default function Recommendations() {
                   <DifficultyBadge difficulty={rec.difficulty} />
                 </div>
                 <p className="text-sm text-gray-600 mb-2">{rec.description}</p>
-                <p className="text-sm font-medium text-green-600">
+                <p className="text-sm font-medium text-teal-600">
                   Potential savings: {rec.savings}
                 </p>
               </div>
@@ -117,7 +117,7 @@ export default function Recommendations() {
           ))}
         </div>
 
-        <button className="w-full mt-3 py-2 text-sm text-green-600 hover:text-green-700 font-medium">
+        <button className="w-full mt-3 py-2 text-sm text-teal-600 hover:text-teal-700 font-medium">
           View all {RECOMMENDATIONS.length} recommendations →
         </button>
       </div>
@@ -129,7 +129,7 @@ export default function Recommendations() {
           {VOUCHERS.map((voucher, index) => (
             <div
               key={index}
-              className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-xl"
+              className="p-4 bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-100 rounded-xl"
             >
               <h4 className="font-medium text-gray-900 mb-1">{voucher.title}</h4>
               <p className="text-sm text-gray-600 mb-2">{voucher.description}</p>
@@ -137,7 +137,7 @@ export default function Recommendations() {
                 <span className="text-xs text-gray-500">Eligibility: {voucher.eligibility}</span>
                 <a
                   href={voucher.link}
-                  className="text-sm font-medium text-green-600 hover:text-green-700"
+                  className="text-sm font-medium text-teal-600 hover:text-teal-700"
                 >
                   Learn more →
                 </a>
@@ -148,7 +148,7 @@ export default function Recommendations() {
       </div>
 
       {/* Potential Total Savings */}
-      <div className="bg-green-600 text-white rounded-xl p-5">
+      <div className="bg-teal-600 text-white rounded-xl p-5">
         <div className="flex items-center gap-3 mb-2">
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -156,7 +156,7 @@ export default function Recommendations() {
           <h3 className="font-semibold text-lg">Total Potential Savings</h3>
         </div>
         <p className="text-3xl font-bold mb-1">Up to S$150/month</p>
-        <p className="text-green-100 text-sm">
+        <p className="text-teal-100 text-sm">
           By implementing all recommended energy-saving measures
         </p>
       </div>

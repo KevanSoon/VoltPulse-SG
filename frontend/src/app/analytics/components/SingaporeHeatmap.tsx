@@ -65,7 +65,7 @@ function HeatmapLegend() {
       <p className="text-xs font-medium text-gray-700 mb-2">Consumption Level</p>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-green-500"></div>
+          <div className="w-4 h-4 rounded-full bg-teal-500"></div>
           <span className="text-xs text-gray-600">Low (&lt;400 kWh)</span>
         </div>
         <div className="flex items-center gap-2">
@@ -86,7 +86,7 @@ function HeatmapLegend() {
 }
 
 function getConsumptionColor(consumption: number): string {
-  if (consumption < 400) return "#22c55e"; // green-500
+  if (consumption < 400) return "#14b8a6"; // teal-500
   if (consumption < 600) return "#eab308"; // yellow-500
   if (consumption < 800) return "#f97316"; // orange-500
   return "#ef4444"; // red-500
@@ -108,7 +108,7 @@ export default function SingaporeHeatmap({ dateRange, fullHeight = false }: Heat
   if (!mounted) {
     return (
       <div className={`${fullHeight ? "h-full" : "h-[400px]"} bg-gray-100 rounded-lg flex items-center justify-center`}>
-        <div className="animate-spin w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full" />
+        <div className="animate-spin w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -187,9 +187,9 @@ export default function SingaporeHeatmap({ dateRange, fullHeight = false }: Heat
 
       {/* Summary Stats */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-green-50 rounded-lg p-3 text-center">
+        <div className="bg-teal-50 rounded-lg p-3 text-center">
           <p className="text-xs text-gray-500">Lowest</p>
-          <p className="text-lg font-bold text-green-600">{minConsumption} kWh</p>
+          <p className="text-lg font-bold text-teal-600">{minConsumption} kWh</p>
           <p className="text-xs text-gray-500">
             {SINGAPORE_CONSUMPTION_DATA.find(d => d.consumption === minConsumption)?.name}
           </p>

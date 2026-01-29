@@ -18,7 +18,7 @@ export default function ViewToggle({ currentView, onChange }: ViewToggleProps) {
           onClick={() => onChange("dashboard")}
           className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors ${
             currentView === "dashboard"
-              ? "bg-green-600 text-white"
+              ? "bg-teal-600 text-white"
               : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
           }`}
         >
@@ -29,7 +29,7 @@ export default function ViewToggle({ currentView, onChange }: ViewToggleProps) {
           onClick={() => onChange("heatmap")}
           className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors ${
             currentView === "heatmap"
-              ? "bg-green-600 text-white"
+              ? "bg-teal-600 text-white"
               : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
           }`}
         >

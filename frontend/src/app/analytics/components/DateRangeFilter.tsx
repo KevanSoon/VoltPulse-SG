@@ -62,7 +62,7 @@ export default function DateRangeFilter({ onChange }: DateRangeFilterProps) {
             onClick={() => handlePresetChange(option.value)}
             className={`px-3 py-1 text-sm rounded-md transition-colors ${
               preset === option.value
-                ? "bg-green-600 text-white"
+                ? "bg-teal-600 text-white"
                 : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
             }`}
           >

@@ -25,18 +25,18 @@ const stats = [
 
 export function StatsSection() {
   return (
-    <section className="py-16 bg-card border-y border-border">
+    <section className="py-16 bg-gradient-to-b from-teal-50/50 to-white border-y border-teal-100/50">
       <div className="container mx-auto px-4 lg:px-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           {stats.map((stat, index) => (
             <div key={index} className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-blue-500 mb-2">
+              <div className="text-3xl md:text-4xl font-bold text-teal-600 mb-2">
                 {stat.value}
               </div>
-              <div className="text-sm font-medium text-foreground mb-1">
+              <div className="text-sm font-medium text-slate-700 mb-1">
                 {stat.label}
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-slate-500">
                 {stat.description}
               </div>
             </div>

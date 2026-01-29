@@ -40,7 +40,7 @@ export default function BillSummary({ data }: BillSummaryProps) {
     return (
       <div className="text-center py-8 text-gray-500">
         <p>No bill data available</p>
-        <Link href="/upload" className="text-green-600 hover:text-green-700 mt-2 inline-block">
+        <Link href="/upload" className="text-teal-600 hover:text-teal-700 mt-2 inline-block">
           Upload a bill to see your summary
         </Link>
       </div>
@@ -57,7 +57,7 @@ export default function BillSummary({ data }: BillSummaryProps) {
   return (
     <div className="space-y-6">
       {/* Bill Overview */}
-      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100">
+      <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-6 border border-teal-100">
         <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-sm text-gray-500">Current Bill - {data.billingPeriod}</p>
@@ -82,10 +82,10 @@ export default function BillSummary({ data }: BillSummaryProps) {
               </>
             ) : (
               <>
-                <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
-                <span className="text-green-600 font-medium">
+                <span className="text-teal-600 font-medium">
                   {usageChange} kWh ({usageChangePercent}%) vs last month
                 </span>
               </>
@@ -120,8 +120,8 @@ export default function BillSummary({ data }: BillSummaryProps) {
           />
         </div>
 
-        <div className={`mt-4 p-3 rounded-lg ${vsNational > 0 ? "bg-red-50" : "bg-green-50"}`}>
-          <p className={`text-sm font-medium ${vsNational > 0 ? "text-red-700" : "text-green-700"}`}>
+        <div className={`mt-4 p-3 rounded-lg ${vsNational > 0 ? "bg-red-50" : "bg-teal-50"}`}>
+          <p className={`text-sm font-medium ${vsNational > 0 ? "text-red-700" : "text-teal-700"}`}>
             {vsNational > 0
               ? `You're using ${vsNational} kWh (+${vsNationalPercent}%) more than the national average`
               : `You're using ${Math.abs(vsNational)} kWh (${Math.abs(Number(vsNationalPercent))}%) less than the national average`
@@ -134,10 +134,10 @@ export default function BillSummary({ data }: BillSummaryProps) {
       <div className="grid grid-cols-2 gap-4">
         <Link
           href="/upload"
-          className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-green-300 hover:shadow-md transition-all"
+          className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-teal-300 hover:shadow-md transition-all"
         >
-          <div className="p-2 bg-green-50 rounded-lg">
-            <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="p-2 bg-teal-50 rounded-lg">
+            <svg className="w-5 h-5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
           </div>
@@ -148,10 +148,10 @@ export default function BillSummary({ data }: BillSummaryProps) {
         </Link>
         <Link
           href="/chat"
-          className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-green-300 hover:shadow-md transition-all"
+          className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-teal-300 hover:shadow-md transition-all"
         >
-          <div className="p-2 bg-green-50 rounded-lg">
-            <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="p-2 bg-teal-50 rounded-lg">
+            <svg className="w-5 h-5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
             </svg>
           </div>

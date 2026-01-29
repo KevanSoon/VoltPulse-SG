@@ -18,7 +18,7 @@ interface MonthlyConsumptionChartProps {
 }
 
 function getBarColor(consumption: number, average: number): string {
-  if (consumption <= average * 0.9) return "#22c55e"; // green - good
+  if (consumption <= average * 0.9) return "#14b8a6"; // teal - good
   if (consumption <= average * 1.1) return "#eab308"; // yellow - average
   return "#ef4444"; // red - high
 }
@@ -44,7 +44,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
         <p className="text-gray-600 text-sm">
           National Avg: <span className="font-medium">{data.average} kWh</span>
         </p>
-        <p className={`text-sm mt-1 font-medium ${diff > 0 ? "text-red-600" : "text-green-600"}`}>
+        <p className={`text-sm mt-1 font-medium ${diff > 0 ? "text-red-600" : "text-teal-600"}`}>
           {diff > 0 ? "+" : ""}{diff} kWh ({diff > 0 ? "+" : ""}{diffPercent}%)
         </p>
       </div>
@@ -103,7 +103,7 @@ export default function MonthlyConsumptionChart({ data, nationalAverage }: Month
             <Bar
               dataKey="consumption"
               radius={[4, 4, 0, 0]}
-              fill="#22c55e"
+              fill="#14b8a6"
               // Dynamic coloring based on consumption vs average
               shape={(props: any) => {
                 const { x, y, width, height, consumption, average } = props;
@@ -128,7 +128,7 @@ export default function MonthlyConsumptionChart({ data, nationalAverage }: Month
       {/* Legend */}
       <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-green-500" />
+          <div className="w-3 h-3 rounded bg-teal-500" />
           <span>Below Average</span>
         </div>
         <div className="flex items-center gap-1">
@@ -151,9 +151,9 @@ export default function MonthlyConsumptionChart({ data, nationalAverage }: Month
           <p className="text-xs text-gray-500">Yearly Total</p>
           <p className="text-lg font-bold text-gray-900">{totalConsumption.toLocaleString()} kWh</p>
         </div>
-        <div className="bg-green-50 rounded-lg p-3 text-center">
+        <div className="bg-teal-50 rounded-lg p-3 text-center">
           <p className="text-xs text-gray-500">Lowest Month</p>
-          <p className="text-lg font-bold text-green-600">{lowestMonth.month}</p>
+          <p className="text-lg font-bold text-teal-600">{lowestMonth.month}</p>
           <p className="text-xs text-gray-500">{lowestMonth.consumption} kWh</p>
         </div>
         <div className="bg-red-50 rounded-lg p-3 text-center">

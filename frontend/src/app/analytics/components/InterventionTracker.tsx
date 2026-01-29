@@ -130,17 +130,17 @@ export default function InterventionTracker() {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-xl">
-          <p className="text-white font-medium">{label}</p>
-          <p className="text-gray-300 text-sm">
+        <div className="bg-white border border-teal-200 rounded-lg p-3 shadow-xl">
+          <p className="text-slate-800 font-medium">{label}</p>
+          <p className="text-slate-600 text-sm">
             Consumption:{" "}
-            <span className="text-white font-medium">
+            <span className="text-slate-800 font-medium">
               {data.consumption_kwh} kWh
             </span>
           </p>
           <p
             className={`text-xs mt-1 ${
-              data.is_after_intervention ? "text-green-400" : "text-gray-500"
+              data.is_after_intervention ? "text-teal-600" : "text-slate-500"
             }`}
           >
             {data.is_after_intervention ? "After intervention" : "Before intervention"}
@@ -198,12 +198,12 @@ export default function InterventionTracker() {
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
               selectedIntervention?.intervention_id === intervention.intervention_id
                 ? "bg-blue-600 text-white"
-                : "bg-gray-700/50 text-gray-300 hover:bg-gray-700"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
             <span>{formatInterventionType(intervention.intervention_type)}</span>
             {intervention.is_significant && (
-              <span className="w-2 h-2 bg-green-400 rounded-full" title="Significant" />
+              <span className="w-2 h-2 bg-teal-400 rounded-full" title="Significant" />
             )}
           </button>
         ))}
@@ -295,45 +295,45 @@ export default function InterventionTracker() {
           <span>Before Avg</span>
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-3 h-0.5 bg-green-400" />
+          <div className="w-3 h-0.5 bg-teal-400" />
           <span>After Avg</span>
         </div>
       </div>
 
       {/* Stats Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-gray-700/30 rounded-lg p-3">
-          <p className="text-gray-400 text-xs">Before Average</p>
-          <p className="text-xl font-bold text-yellow-400">
+        <div className="bg-teal-50 border border-teal-100 rounded-lg p-3">
+          <p className="text-slate-500 text-xs">Before Average</p>
+          <p className="text-xl font-bold text-yellow-600">
             {selectedIntervention.before_avg_kwh.toFixed(0)} kWh
           </p>
         </div>
-        <div className="bg-gray-700/30 rounded-lg p-3">
-          <p className="text-gray-400 text-xs">After Average</p>
-          <p className="text-xl font-bold text-green-400">
+        <div className="bg-teal-50 border border-teal-100 rounded-lg p-3">
+          <p className="text-slate-500 text-xs">After Average</p>
+          <p className="text-xl font-bold text-teal-600">
             {selectedIntervention.after_avg_kwh.toFixed(0)} kWh
           </p>
         </div>
-        <div className="bg-gray-700/30 rounded-lg p-3">
-          <p className="text-gray-400 text-xs">Change</p>
+        <div className="bg-teal-50 border border-teal-100 rounded-lg p-3">
+          <p className="text-slate-500 text-xs">Change</p>
           <p
             className={`text-xl font-bold ${
               selectedIntervention.consumption_change_percent < 0
-                ? "text-green-400"
-                : "text-red-400"
+                ? "text-teal-600"
+                : "text-red-500"
             }`}
           >
             {selectedIntervention.consumption_change_percent > 0 ? "+" : ""}
             {selectedIntervention.consumption_change_percent.toFixed(1)}%
           </p>
         </div>
-        <div className="bg-gray-700/30 rounded-lg p-3">
-          <p className="text-gray-400 text-xs">Statistical Significance</p>
+        <div className="bg-teal-50 border border-teal-100 rounded-lg p-3">
+          <p className="text-slate-500 text-xs">Statistical Significance</p>
           <p
             className={`text-lg font-bold ${
               selectedIntervention.is_significant
-                ? "text-green-400"
-                : "text-gray-400"
+                ? "text-teal-600"
+                : "text-slate-500"
             }`}
           >
             {selectedIntervention.is_significant ? (
@@ -351,10 +351,10 @@ export default function InterventionTracker() {
 
       {/* Projected savings */}
       {savings > 0 && selectedIntervention.is_significant && (
-        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+        <div className="bg-teal-500/10 border border-teal-500/30 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-2">
             <svg
-              className="w-5 h-5 text-green-400"
+              className="w-5 h-5 text-teal-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -366,7 +366,7 @@ export default function InterventionTracker() {
                 d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <span className="text-green-400 font-medium">
+            <span className="text-teal-400 font-medium">
               Statistically Significant Improvement
             </span>
           </div>
@@ -376,7 +376,7 @@ export default function InterventionTracker() {
               {annualSavingsKwh.toFixed(0)} kWh
             </span>{" "}
             (~
-            <span className="text-green-400 font-medium">
+            <span className="text-teal-400 font-medium">
               S${annualSavingsSgd.toFixed(0)}
             </span>
             /year)

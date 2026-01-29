@@ -10,7 +10,7 @@ export default function AnalyticsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
       <main className="flex-1 max-w-7xl mx-auto py-8 px-6 w-full">{children}</main>
       <Footer />

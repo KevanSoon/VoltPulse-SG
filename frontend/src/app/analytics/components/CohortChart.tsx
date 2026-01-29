@@ -110,22 +110,22 @@ export default function CohortChart() {
       );
 
       return (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-xl">
-          <p className="text-white font-semibold mb-2">{data.name}</p>
+        <div className="bg-white border border-teal-200 rounded-lg p-3 shadow-xl">
+          <p className="text-slate-800 font-semibold mb-2">{data.name}</p>
           <div className="space-y-1 text-sm">
-            <p className="text-gray-300">
-              Mean: <span className="text-white font-medium">{data.mean.toFixed(0)} kWh</span>
+            <p className="text-slate-600">
+              Mean: <span className="text-slate-800 font-medium">{data.mean.toFixed(0)} kWh</span>
             </p>
             {cohort && (
               <>
-                <p className="text-gray-300">
-                  Std Dev: <span className="text-white">{cohort.std_dev_kwh.toFixed(0)} kWh</span>
+                <p className="text-slate-600">
+                  Std Dev: <span className="text-slate-800">{cohort.std_dev_kwh.toFixed(0)} kWh</span>
                 </p>
-                <p className="text-gray-300">
-                  95% CI: <span className="text-blue-400">[{cohort.ci_lower.toFixed(0)}, {cohort.ci_upper.toFixed(0)}]</span>
+                <p className="text-slate-600">
+                  95% CI: <span className="text-teal-600">[{cohort.ci_lower.toFixed(0)}, {cohort.ci_upper.toFixed(0)}]</span>
                 </p>
-                <p className="text-gray-300">
-                  Samples: <span className="text-white">{cohort.sample_size}</span>
+                <p className="text-slate-600">
+                  Samples: <span className="text-slate-800">{cohort.sample_size}</span>
                 </p>
               </>
             )}
@@ -183,7 +183,7 @@ export default function CohortChart() {
       <div className="mt-4 flex items-center justify-between text-xs">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded bg-green-500" />
+            <div className="w-3 h-3 rounded bg-teal-500" />
             <span className="text-gray-400">&lt;300 kWh</span>
           </div>
           <div className="flex items-center gap-1">
@@ -206,12 +206,12 @@ export default function CohortChart() {
         {cohortData.slice(0, 3).map((cohort) => (
           <div
             key={cohort.housing_type}
-            className="bg-gray-700/30 rounded-lg p-2 text-center"
+            className="bg-teal-50 border border-teal-100 rounded-lg p-2 text-center"
           >
-            <p className="text-white font-medium text-sm">
+            <p className="text-slate-800 font-medium text-sm">
               {formatHousingType(cohort.housing_type)}
             </p>
-            <p className="text-gray-400 text-xs">
+            <p className="text-slate-500 text-xs">
               n={cohort.sample_size}, μ={cohort.mean_kwh.toFixed(0)}
             </p>
           </div>

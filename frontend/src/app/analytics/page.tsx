@@ -4,12 +4,15 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Download, Share2, RefreshCw, ChevronDown, ChevronUp, HelpCircle, Info } from "lucide-react";
 import StatsCard from "./components/StatsCard";
 import ViewToggle, { ViewMode } from "./components/ViewToggle";
 import UtilityToggle, { UtilityType } from "./components/UtilityToggle";
 import BillSummary from "./components/BillSummary";
 import MonthlyConsumptionChart from "./components/MonthlyConsumptionChart";
 import { OCRResult, BillData, ChartData, UtilityData } from "./types";
+import Breadcrumb from "../components/Breadcrumb";
+import { SkeletonDashboard } from "../components/Skeleton";
 
 // Dynamic import for the map component to avoid SSR issues
 const SingaporeHeatmap = dynamic(
@@ -17,12 +20,20 @@ const SingaporeHeatmap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full" />
+      <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center animate-pulse">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full mx-auto" />
+          <p className="mt-2 text-sm text-gray-500">Loading map...</p>
+        </div>
       </div>
     ),
   }
 );
+
+// Breadcrumb items for analytics page
+const breadcrumbItems = [
+  { label: "Analytics", href: "/analytics" },
+];
 
 function formatBillingPeriod(startDate: string | null, endDate: string | null): string {
   if (!endDate) return "Current Period";
@@ -140,6 +151,54 @@ export default function AnalyticsDashboard() {
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [aiRecommendations, setAiRecommendations] = useState<string | null>(null);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [showTooltip, setShowTooltip] = useState<string | null>(null);
+
+  // Toggle section collapse
+  const toggleSection = (section: string) => {
+    setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // Export data as CSV
+  const exportData = () => {
+    if (!ocrData) return;
+    
+    const data = ocrData.form_data.extraction_data;
+    const csvContent = [
+      "Metric,Value",
+      `Total Amount,${data.total_amount}`,
+      `Electricity Usage (kWh),${data.consumption_kwh}`,
+      `Gas Usage (kWh),${data.gas_usage_kwh || 'N/A'}`,
+      `Water Usage (m³),${data.water_usage_cu_m || 'N/A'}`,
+      `Billing Period,${data.billing_period_start} to ${data.billing_period_end}`,
+    ].join("\n");
+    
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "energy-analytics.csv";
+    link.click();
+  };
+
+  // Share dashboard
+  const shareDashboard = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "My Energy Dashboard - VoltPulse",
+          text: `Check out my energy consumption analytics!`,
+          url: window.location.href,
+        });
+      } catch (err) {
+        console.log("Share cancelled");
+      }
+    } else {
+      // Fallback: copy link
+      navigator.clipboard.writeText(window.location.href);
+      alert("Link copied to clipboard!");
+    }
+  };
 
   useEffect(() => {
     async function fetchOCRResults() {
@@ -248,29 +307,39 @@ Please be specific with product names and prices in SGD where possible.`,
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full mx-auto" />
-          <p className="mt-4 text-gray-600">Loading your energy data...</p>
-        </div>
+      <div className="space-y-6">
+        <Breadcrumb items={breadcrumbItems} />
+        <SkeletonDashboard />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+      <div className="space-y-6">
+        <Breadcrumb items={breadcrumbItems} />
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center max-w-md">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+              <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <p className="mt-4 text-gray-900 font-medium">Unable to load data</p>
+            <p className="mt-2 text-gray-600">{error}</p>
+            <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Retry
+              </button>
+              <a href="/upload" className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors">
+                Upload a Bill
+              </a>
+            </div>
           </div>
-          <p className="mt-4 text-gray-900 font-medium">Unable to load data</p>
-          <p className="mt-2 text-gray-600">{error}</p>
-          <a href="/upload" className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-            Upload a Bill
-          </a>
         </div>
       </div>
     );
@@ -280,6 +349,9 @@ Please be specific with product names and prices in SGD where possible.`,
   if (viewMode === "heatmap") {
     return (
       <div className="space-y-6">
+        {/* Breadcrumb */}
+        <Breadcrumb items={[...breadcrumbItems, { label: "Heatmap", href: "/analytics?view=heatmap" }]} />
+        
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -288,7 +360,16 @@ Please be specific with product names and prices in SGD where possible.`,
               Explore energy consumption patterns across Singapore districts
             </p>
           </div>
-          <ViewToggle currentView={viewMode} onChange={setViewMode} />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={shareDashboard}
+              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Share dashboard"
+            >
+              <Share2 className="w-5 h-5" />
+            </button>
+            <ViewToggle currentView={viewMode} onChange={setViewMode} />
+          </div>
         </div>
 
         {/* Full-screen Heatmap */}
@@ -315,6 +396,9 @@ Please be specific with product names and prices in SGD where possible.`,
   // Dashboard View
   return (
     <div className="space-y-8">
+      {/* Breadcrumb */}
+      <Breadcrumb items={breadcrumbItems} />
+      
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -324,6 +408,24 @@ Please be specific with product names and prices in SGD where possible.`,
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportData}
+              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Export data as CSV"
+              title="Export as CSV"
+            >
+              <Download className="w-5 h-5" />
+            </button>
+            <button
+              onClick={shareDashboard}
+              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Share dashboard"
+              title="Share"
+            >
+              <Share2 className="w-5 h-5" />
+            </button>
+          </div>
           <UtilityToggle currentUtility={utilityType} onChange={setUtilityType} />
           <ViewToggle currentView={viewMode} onChange={setViewMode} />
         </div>
@@ -331,18 +433,33 @@ Please be specific with product names and prices in SGD where possible.`,
 
       {/* Quick Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard
-          title={`This Month (${getUtilityLabel()})`}
-          value={`${currentUsage} ${unit}`}
-          trend={previousUsage ? `${usageChange >= 0 ? "+" : ""}${usageChange.toFixed(1)}% vs last month` : "No previous data"}
-          trendDirection={usageChange > 0 ? "up" : usageChange < 0 ? "down" : "neutral"}
-          trendColor={usageChange > 0 ? "red" : "green"}
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          }
-        />
+        <div className="relative">
+          <StatsCard
+            title={`This Month (${getUtilityLabel()})`}
+            value={`${currentUsage} ${unit}`}
+            trend={previousUsage ? `${usageChange >= 0 ? "+" : ""}${usageChange.toFixed(1)}% vs last month` : "No previous data"}
+            trendDirection={usageChange > 0 ? "up" : usageChange < 0 ? "down" : "neutral"}
+            trendColor={usageChange > 0 ? "red" : "green"}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            }
+          />
+          <button
+            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-600"
+            onMouseEnter={() => setShowTooltip('usage')}
+            onMouseLeave={() => setShowTooltip(null)}
+            aria-label="More info about this month's usage"
+          >
+            <Info className="w-4 h-4" />
+          </button>
+          {showTooltip === 'usage' && (
+            <div className="absolute top-8 right-0 z-10 w-48 p-2 bg-white border border-teal-200 text-slate-700 text-xs rounded-lg shadow-lg">
+              Your total {getUtilityLabel().toLowerCase()} consumption for the current billing period.
+            </div>
+          )}
+        </div>
         <StatsCard
           title="Monthly Average"
           value={`${monthlyAverage} ${unit}`}
@@ -354,18 +471,33 @@ Please be specific with product names and prices in SGD where possible.`,
             </svg>
           }
         />
-        <StatsCard
-          title="vs National Avg"
-          value={`${vsNational >= 0 ? "+" : ""}${vsNational.toFixed(0)}%`}
-          trend={`National: ${nationalAverage} ${unit}`}
-          trendDirection={vsNational > 0 ? "up" : "down"}
-          trendColor={vsNational > 0 ? "red" : "green"}
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          }
-        />
+        <div className="relative">
+          <StatsCard
+            title="vs National Avg"
+            value={`${vsNational >= 0 ? "+" : ""}${vsNational.toFixed(0)}%`}
+            trend={`National: ${nationalAverage} ${unit}`}
+            trendDirection={vsNational > 0 ? "up" : "down"}
+            trendColor={vsNational > 0 ? "red" : "green"}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            }
+          />
+          <button
+            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-600"
+            onMouseEnter={() => setShowTooltip('national')}
+            onMouseLeave={() => setShowTooltip(null)}
+            aria-label="More info about national average"
+          >
+            <Info className="w-4 h-4" />
+          </button>
+          {showTooltip === 'national' && (
+            <div className="absolute top-8 right-0 z-10 w-56 p-2 bg-white border border-teal-200 text-slate-700 text-xs rounded-lg shadow-lg">
+              Based on Singapore&apos;s average household consumption. Lower than average = good!
+            </div>
+          )}
+        </div>
         <StatsCard
           title="Potential Savings"
           value={potentialSavings > 0 ? `S$${potentialSavings}/mo` : "On track!"}
@@ -384,20 +516,49 @@ Please be specific with product names and prices in SGD where possible.`,
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bill Summary - Left Column */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Bill Summary</h2>
-            <BillSummary data={billData} />
+          {/* Collapsible Bill Summary */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <button
+              onClick={() => toggleSection('billSummary')}
+              className="w-full flex items-center justify-between p-6 hover:bg-gray-50 transition-colors"
+              aria-expanded={!collapsedSections.billSummary}
+            >
+              <h2 className="text-lg font-semibold text-gray-900">Bill Summary</h2>
+              {collapsedSections.billSummary ? (
+                <ChevronDown className="w-5 h-5 text-gray-500" />
+              ) : (
+                <ChevronUp className="w-5 h-5 text-gray-500" />
+              )}
+            </button>
+            {!collapsedSections.billSummary && (
+              <div className="px-6 pb-6">
+                <BillSummary data={billData} />
+              </div>
+            )}
           </div>
 
-          {/* Monthly Consumption Chart */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
+          {/* Collapsible Monthly Consumption Chart */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <button
+              onClick={() => toggleSection('chart')}
+              className="w-full flex items-center justify-between p-6 hover:bg-gray-50 transition-colors"
+              aria-expanded={!collapsedSections.chart}
+            >
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Monthly Consumption</h2>
-                <p className="text-gray-500 text-sm mt-1">Your {getUtilityLabel().toLowerCase()} usage over the past year</p>
+                <h2 className="text-lg font-semibold text-gray-900 text-left">Monthly Consumption</h2>
+                <p className="text-gray-500 text-sm mt-1 text-left">Your {getUtilityLabel().toLowerCase()} usage over the past year</p>
               </div>
-            </div>
-            <MonthlyConsumptionChart data={chartData} nationalAverage={nationalAverage} />
+              {collapsedSections.chart ? (
+                <ChevronDown className="w-5 h-5 text-gray-500 flex-shrink-0" />
+              ) : (
+                <ChevronUp className="w-5 h-5 text-gray-500 flex-shrink-0" />
+              )}
+            </button>
+            {!collapsedSections.chart && (
+              <div className="px-6 pb-6">
+                <MonthlyConsumptionChart data={chartData} nationalAverage={nationalAverage} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -408,8 +569,8 @@ Please be specific with product names and prices in SGD where possible.`,
 
             {!showRecommendations ? (
               <div className="text-center py-6">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                   </svg>
                 </div>
@@ -418,7 +579,7 @@ Please be specific with product names and prices in SGD where possible.`,
                 </p>
                 <button
                   onClick={getAIRecommendations}
-                  className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="w-full px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -430,7 +591,7 @@ Please be specific with product names and prices in SGD where possible.`,
               <div className="space-y-4">
                 {loadingRecommendations ? (
                   <div className="text-center py-8">
-                    <div className="animate-spin w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full mx-auto mb-3" />
+                    <div className="animate-spin w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full mx-auto mb-3" />
                     <p className="text-gray-600 text-sm">Analyzing your usage and finding the best recommendations...</p>
                   </div>
                 ) : (
@@ -448,10 +609,10 @@ Please be specific with product names and prices in SGD where possible.`,
                           prose-table:my-4 prose-table:border-collapse prose-table:w-full
                           prose-th:bg-gray-100 prose-th:text-gray-900 prose-th:font-semibold prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:border prose-th:border-gray-200
                           prose-td:px-3 prose-td:py-2 prose-td:border prose-td:border-gray-200 prose-td:text-gray-700
-                          prose-blockquote:border-l-4 prose-blockquote:border-green-500 prose-blockquote:bg-green-50 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:my-3 prose-blockquote:italic prose-blockquote:text-gray-700
-                          prose-code:bg-gray-100 prose-code:text-green-700 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
+                          prose-blockquote:border-l-4 prose-blockquote:border-teal-500 prose-blockquote:bg-teal-50 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:my-3 prose-blockquote:italic prose-blockquote:text-gray-700
+                          prose-code:bg-gray-100 prose-code:text-teal-700 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
                           prose-hr:border-gray-200 prose-hr:my-4
-                          prose-a:text-green-600 prose-a:no-underline hover:prose-a:underline
+                          prose-a:text-teal-600 prose-a:no-underline hover:prose-a:underline
                         ">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {aiRecommendations || ""}
@@ -467,7 +628,7 @@ Please be specific with product names and prices in SGD where possible.`,
                       </button>
                       <a
                         href="/chat"
-                        className="flex-1 px-3 py-2 text-sm bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors text-center"
+                        className="flex-1 px-3 py-2 text-sm bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors text-center"
                       >
                         Chat for More
                       </a>
@@ -481,7 +642,7 @@ Please be specific with product names and prices in SGD where possible.`,
       </div>
 
       {/* Help Section */}
-      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100">
+      <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-6 border border-teal-100">
         <div className="flex flex-col md:flex-row items-center gap-6">
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Need Help Understanding Your Usage?</h3>
@@ -492,7 +653,7 @@ Please be specific with product names and prices in SGD where possible.`,
           </div>
           <a
             href="/chat"
-            className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap"
+            className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />

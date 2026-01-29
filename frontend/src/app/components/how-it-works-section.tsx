@@ -35,13 +35,13 @@ const steps = [
 
 export function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="py-20 lg:py-28 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <section id="how-it-works" className="py-20 lg:py-28 bg-gradient-to-br from-teal-600 via-teal-700 to-cyan-800">
       <div className="container mx-auto px-4 lg:px-8">
         <div className="max-w-3xl mx-auto text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4 text-white">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">
             How It Works
           </h2>
-          <p className="text-lg text-muted-foreground text-pretty text-gray-400">
+          <p className="text-lg text-pretty text-teal-100">
             Get started in minutes. Our AI handles the heavy lifting so you can
             focus on saving.
           </p>
@@ -53,16 +53,16 @@ export function HowItWorksSection() {
               <div key={index} className="relative">
                 {/* Connector Line (hidden on mobile, visible on lg) */}
                 {index < steps.length - 1 && (
-                  <div className="hidden lg:block absolute top-12 left-[calc(50%+40px)] w-[calc(100%-48px)] h-[2px] bg-border" />
+                  <div className="hidden lg:block absolute top-12 left-[calc(50%+40px)] w-[calc(100%-48px)] h-[2px] bg-white/30" />
                 )}
 
                 <div className="flex flex-col items-center text-center">
                   {/* Step Number & Icon */}
                   <div className="relative mb-6">
-                    <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-green-200 border-2 border-green-400">
-                      <step.icon className="h-10 w-10 text-primary" />
+                    <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-white shadow-lg border border-teal-200">
+                      <step.icon className="h-10 w-10 text-teal-600" />
                     </div>
-                    <div className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-green-500 text-sm font-bold">
+                    <div className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-teal-800 text-sm font-bold shadow-md">
                       {step.number}
                     </div>
                   </div>
@@ -71,7 +71,7 @@ export function HowItWorksSection() {
                   <h3 className="font-semibold text-lg text-white mb-2">
                     {step.title}
                   </h3>
-                  <p className="text-sm text-gray-300 leading-relaxed">
+                  <p className="text-sm text-teal-100 leading-relaxed">
                     {step.description}
                   </p>
                 </div>
