@@ -36,7 +36,7 @@ VoltPulse SG is an AI-powered platform that:
 | Backend | FastAPI, Python 3.11+ |
 | AI/ML | LangGraph, LangChain, Ollama (GPT-OSS 120B) |
 | Database | Supabase (PostgreSQL + pgvector) |
-| OCR | PaddleOCR via Gradio |
+| OCR | OpenAI Vision |
 | Embeddings | SeaLion Encoder |
 | Maps | Leaflet / React-Leaflet |
 
