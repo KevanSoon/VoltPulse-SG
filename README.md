@@ -187,7 +187,7 @@ Ensure all environment variables are set as secrets in your deployment platform.
 
 ### Known Limitations
 - OCR accuracy may vary with image quality; clear, high-resolution scans work best
-- Climate Voucher retailer data is sourced from NEA and may not reflect real-time availability
+- Climate Voucher retailer data is sourced from https://www.climate-friendly-households.gov.sg/cv-spend/ and may not reflect real-time availability
 - The AI chatbot requires an active Ollama API connection
 
 ### Assumptions
