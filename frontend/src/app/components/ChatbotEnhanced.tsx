@@ -26,7 +26,14 @@ const quickActions = [
   "Compare to national average",
 ];
 
-export default function Chatbot({ userId = "default_user", threadId = "default_thread" }: ChatbotProps) {
+// Generate anonymous session ID (no user tracking)
+function generateAnonymousSessionId(): string {
+  return `anon_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+}
+
+export default function Chatbot({ userId = "anonymous", threadId }: ChatbotProps) {
+  // Use provided threadId or generate anonymous one per session
+  const [sessionThreadId] = useState(() => threadId || generateAnonymousSessionId());
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -72,8 +79,8 @@ export default function Chatbot({ userId = "default_user", threadId = "default_t
         },
         body: JSON.stringify({
           message: userMessage.content,
-          user_id: userId,
-          thread_id: threadId,
+          user_id: "anonymous",
+          thread_id: sessionThreadId,
         }),
       });
 

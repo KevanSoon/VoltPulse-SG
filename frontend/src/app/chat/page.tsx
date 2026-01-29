@@ -52,6 +52,11 @@ const breadcrumbItems = [
   { label: "Chat", href: "/chat" },
 ];
 
+// Generate anonymous session ID (no user tracking)
+function generateAnonymousSessionId(): string {
+  return `anon_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+}
+
 function ChatContent() {
   const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -62,8 +67,8 @@ function ChatContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const userId = "default_user";
-  const threadId = "default_thread";
+  // Anonymous session - no user tracking
+  const [sessionId] = useState(() => generateAnonymousSessionId());
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -102,8 +107,8 @@ function ChatContent() {
         },
         body: JSON.stringify({
           message: userMessage.content,
-          user_id: userId,
-          thread_id: threadId,
+          user_id: "anonymous",
+          thread_id: sessionId,
         }),
       });
 
@@ -168,8 +173,8 @@ function ChatContent() {
         },
         body: JSON.stringify({
           message: userMessage.content,
-          user_id: userId,
-          thread_id: threadId,
+          user_id: "anonymous",
+          thread_id: sessionId,
         }),
       });
 
