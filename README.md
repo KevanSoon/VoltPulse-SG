@@ -190,22 +190,6 @@ Ensure all environment variables are set as secrets in your deployment platform.
 - Climate Voucher retailer data is sourced from NEA and may not reflect real-time availability
 - The AI chatbot requires an active Ollama API connection
 
-### Privacy & Data Security
-
-| Feature | Implementation |
-|---------|----------------|
-| **Session Anonymization** | Random UUID session IDs (no user tracking) |
-| **NRIC Masking** | Only last 4 characters shown (`S****567A`) |
-| **Account Number Masking** | Only last 4 digits displayed |
-| **Coordinate Precision** | Reduced to 3 decimals (~100m accuracy) |
-| **Data Minimization** | Sessions auto-expire, no long-term PII storage |
-| **Local Processing** | Bill OCR processed server-side, not sent to third parties |
-
-**Data Retention:**
-- Chat sessions: Cleared on browser close (localStorage)
-- Bill data: Not persisted after analysis session
-- No cookies or user tracking implemented
-
 ### Assumptions
 - Users have access to their SP Group utility bills
 - Singapore-based households with HDB or private residential addresses
