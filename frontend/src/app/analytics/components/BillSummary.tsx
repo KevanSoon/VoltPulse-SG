@@ -98,35 +98,38 @@ export default function BillSummary({ data }: BillSummaryProps) {
 
       {/* Comparison */}
       <div className="bg-white rounded-xl p-6 border border-gray-200">
-        <h3 className="font-semibold text-gray-900 mb-4">How You Compare</h3>
-        <div className="space-y-4">
-          <ComparisonBar
-            value={data.currentUsage}
-            maxValue={Math.max(data.currentUsage, data.nationalAverage, data.neighbourAverage) * 1.2}
-            label="Your Usage"
-            color="bg-blue-500"
-          />
-          <ComparisonBar
-            value={data.neighbourAverage}
-            maxValue={Math.max(data.currentUsage, data.nationalAverage, data.neighbourAverage) * 1.2}
-            label="Neighbour Average"
-            color="bg-yellow-500"
-          />
-          <ComparisonBar
-            value={data.nationalAverage}
-            maxValue={Math.max(data.currentUsage, data.nationalAverage, data.neighbourAverage) * 1.2}
-            label="National Average"
-            color="bg-gray-400"
-          />
-        </div>
-
-        <div className={`mt-4 p-3 rounded-lg ${vsNational > 0 ? "bg-red-50" : "bg-teal-50"}`}>
-          <p className={`text-sm font-medium ${vsNational > 0 ? "text-red-700" : "text-teal-700"}`}>
-            {vsNational > 0
-              ? `You're using ${vsNational} kWh (+${vsNationalPercent}%) more than the national average`
-              : `You're using ${Math.abs(vsNational)} kWh (${Math.abs(Number(vsNationalPercent))}%) less than the national average`
-            }
-          </p>
+        <div className="flex items-start gap-4">
+          <div className="flex-1">
+            <h3 className="font-semibold text-gray-900 mb-4">How You Compare</h3>
+            <div className="space-y-4">
+              <ComparisonBar
+                value={data.currentUsage}
+                maxValue={Math.max(data.currentUsage, data.nationalAverage, data.neighbourAverage) * 1.2}
+                label="Your Usage"
+                color="bg-blue-500"
+              />
+              <ComparisonBar
+                value={data.neighbourAverage}
+                maxValue={Math.max(data.currentUsage, data.nationalAverage, data.neighbourAverage) * 1.2}
+                label="Neighbour Average"
+                color="bg-yellow-500"
+              />
+              <ComparisonBar
+                value={data.nationalAverage}
+                maxValue={Math.max(data.currentUsage, data.nationalAverage, data.neighbourAverage) * 1.2}
+                label="National Average"
+                color="bg-gray-400"
+              />
+            </div>
+          </div>
+          <div className={`flex-shrink-0 p-3 rounded-lg text-center ${vsNational > 0 ? "bg-red-50" : "bg-teal-50"}`}>
+            <p className={`text-2xl font-bold ${vsNational > 0 ? "text-red-600" : "text-teal-600"}`}>
+              {vsNational > 0 ? "+" : ""}{vsNationalPercent}%
+            </p>
+            <p className={`text-xs ${vsNational > 0 ? "text-red-600" : "text-teal-600"}`}>
+              vs national avg
+            </p>
+          </div>
         </div>
       </div>
 

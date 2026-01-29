@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Download, Share2, RefreshCw, ChevronDown, ChevronUp, HelpCircle, Info } from "lucide-react";
+import { Download, Share2, RefreshCw, HelpCircle, Info } from "lucide-react";
 import StatsCard from "./components/StatsCard";
 import ViewToggle, { ViewMode } from "./components/ViewToggle";
 import UtilityToggle, { UtilityType } from "./components/UtilityToggle";
@@ -153,6 +153,7 @@ export default function AnalyticsDashboard() {
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'summary' | 'monthly'>('summary');
 
   // Toggle section collapse
   const toggleSection = (section: string) => {
@@ -348,15 +349,12 @@ Please be specific with product names and prices in SGD where possible.`,
   // Heatmap View
   if (viewMode === "heatmap") {
     return (
-      <div className="space-y-6">
-        {/* Breadcrumb */}
-        <Breadcrumb items={[...breadcrumbItems, { label: "Heatmap", href: "/analytics?view=heatmap" }]} />
-        
+      <div className="h-full flex flex-col gap-4">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 flex-shrink-0">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Singapore Energy Heatmap</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-2xl font-bold text-gray-900">Singapore Energy Heatmap</h1>
+            <p className="text-gray-600 text-sm">
               Explore energy consumption patterns across Singapore districts
             </p>
           </div>
@@ -372,20 +370,17 @@ Please be specific with product names and prices in SGD where possible.`,
           </div>
         </div>
 
-        {/* Full-screen Heatmap */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
+        {/* Full-height Heatmap */}
+        <div className="bg-white rounded-xl p-4 border border-gray-200 flex-1 min-h-0">
+          <div className="flex items-center justify-between mb-2">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Consumption by District</h2>
-              <p className="text-gray-500 text-sm mt-1">
-                See how your area compares to other districts in Singapore
+              <h2 className="text-base font-semibold text-gray-900">Consumption by District</h2>
+              <p className="text-gray-500 text-xs">
+                Click markers for details
               </p>
             </div>
-            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
-              Click markers for details
-            </span>
           </div>
-          <div className="h-[600px]">
+          <div className="h-[calc(100%-3rem)]">
             <SingaporeHeatmap dateRange={null} fullHeight />
           </div>
         </div>
@@ -395,35 +390,32 @@ Please be specific with product names and prices in SGD where possible.`,
 
   // Dashboard View
   return (
-    <div className="space-y-8">
-      {/* Breadcrumb */}
-      <Breadcrumb items={breadcrumbItems} />
-      
+    <div className="h-full flex flex-col gap-4">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 flex-shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Your Energy Dashboard</h1>
-          <p className="text-gray-600 mt-1">
-            Track your consumption, compare with others, and discover ways to save
+          <h1 className="text-2xl font-bold text-gray-900">Your Energy Dashboard</h1>
+          <p className="text-gray-600 text-sm">
+            Track consumption, compare with others, and discover ways to save
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={exportData}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               aria-label="Export data as CSV"
               title="Export as CSV"
             >
-              <Download className="w-5 h-5" />
+              <Download className="w-4 h-4" />
             </button>
             <button
               onClick={shareDashboard}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               aria-label="Share dashboard"
               title="Share"
             >
-              <Share2 className="w-5 h-5" />
+              <Share2 className="w-4 h-4" />
             </button>
           </div>
           <UtilityToggle currentUtility={utilityType} onChange={setUtilityType} />
@@ -431,8 +423,8 @@ Please be specific with product names and prices in SGD where possible.`,
         </div>
       </div>
 
-      {/* Quick Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Quick Stats Row - Compact */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 flex-shrink-0">
         <div className="relative">
           <StatsCard
             title={`This Month (${getUtilityLabel()})`}
@@ -505,113 +497,124 @@ Please be specific with product names and prices in SGD where possible.`,
           trendDirection="down"
           trendColor="green"
           icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           }
         />
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Bill Summary - Left Column */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Collapsible Bill Summary */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <button
-              onClick={() => toggleSection('billSummary')}
-              className="w-full flex items-center justify-between p-6 hover:bg-gray-50 transition-colors"
-              aria-expanded={!collapsedSections.billSummary}
-            >
-              <h2 className="text-lg font-semibold text-gray-900">Bill Summary</h2>
-              {collapsedSections.billSummary ? (
-                <ChevronDown className="w-5 h-5 text-gray-500" />
-              ) : (
-                <ChevronUp className="w-5 h-5 text-gray-500" />
-              )}
-            </button>
-            {!collapsedSections.billSummary && (
-              <div className="px-6 pb-6">
-                <BillSummary data={billData} />
-              </div>
-            )}
-          </div>
+      {/* Main Content Grid - Fills remaining space */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
+        {/* Bill Summary & Monthly Consumption - Left Column */}
+        <div className="lg:col-span-2 flex flex-col min-h-0">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-200 flex-shrink-0">
+              <button
+                onClick={() => setActiveTab('summary')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'summary'
+                    ? 'text-teal-600 bg-teal-50/50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Bill Summary
+                </span>
+                {activeTab === 'summary' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('monthly')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'monthly'
+                    ? 'text-teal-600 bg-teal-50/50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Monthly Trend
+                </span>
+                {activeTab === 'monthly' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600" />
+                )}
+              </button>
+            </div>
 
-          {/* Collapsible Monthly Consumption Chart */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <button
-              onClick={() => toggleSection('chart')}
-              className="w-full flex items-center justify-between p-6 hover:bg-gray-50 transition-colors"
-              aria-expanded={!collapsedSections.chart}
-            >
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 text-left">Monthly Consumption</h2>
-                <p className="text-gray-500 text-sm mt-1 text-left">Your {getUtilityLabel().toLowerCase()} usage over the past year</p>
-              </div>
-              {collapsedSections.chart ? (
-                <ChevronDown className="w-5 h-5 text-gray-500 flex-shrink-0" />
+            {/* Tab Content */}
+            <div className="p-4 flex-1 overflow-auto">
+              {activeTab === 'summary' ? (
+                <BillSummary data={billData} />
               ) : (
-                <ChevronUp className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                <div className="h-full flex flex-col">
+                  <p className="text-gray-500 text-sm mb-2">Your {getUtilityLabel().toLowerCase()} usage over the past year</p>
+                  <div className="flex-1 min-h-[200px]">
+                    <MonthlyConsumptionChart data={chartData} nationalAverage={nationalAverage} />
+                  </div>
+                </div>
               )}
-            </button>
-            {!collapsedSections.chart && (
-              <div className="px-6 pb-6">
-                <MonthlyConsumptionChart data={chartData} nationalAverage={nationalAverage} />
-              </div>
-            )}
+            </div>
           </div>
         </div>
 
         {/* AI Recommendations - Right Column */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Personalized Recommendations</h2>
+        <div className="lg:col-span-1 flex flex-col min-h-0">
+          <div className="bg-white rounded-xl p-4 border border-gray-200 flex flex-col flex-1 min-h-0">
+            <h2 className="text-base font-semibold text-gray-900 mb-3 flex-shrink-0">Personalized Recommendations</h2>
 
             {!showRecommendations ? (
-              <div className="text-center py-6">
-                <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="text-center py-4 flex-1 flex flex-col justify-center">
+                <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                   </svg>
                 </div>
-                <p className="text-gray-600 mb-4">
-                  Get AI-powered recommendations for energy-efficient appliances and government vouchers tailored to your {getUtilityLabel().toLowerCase()} usage.
+                <p className="text-gray-600 text-sm mb-3">
+                  Get AI-powered recommendations tailored to your {getUtilityLabel().toLowerCase()} usage.
                 </p>
                 <button
                   onClick={getAIRecommendations}
-                  className="w-full px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="w-full px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  Get Smart Recommendations
+                  Get Recommendations
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="flex-1 flex flex-col min-h-0">
                 {loadingRecommendations ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full mx-auto mb-3" />
-                    <p className="text-gray-600 text-sm">Analyzing your usage and finding the best recommendations...</p>
+                  <div className="text-center py-6 flex-1 flex flex-col justify-center">
+                    <div className="animate-spin w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full mx-auto mb-2" />
+                    <p className="text-gray-600 text-xs">Analyzing usage...</p>
                   </div>
                 ) : (
                   <>
-                    <div className="max-h-[500px] overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto min-h-0">
                       <div className="prose prose-sm max-w-none
-                          prose-headings:text-gray-900 prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2
-                          prose-h2:text-lg prose-h2:border-b prose-h2:border-gray-200 prose-h2:pb-2
-                          prose-h3:text-base
-                          prose-p:text-gray-700 prose-p:my-2 prose-p:leading-relaxed
+                          prose-headings:text-gray-900 prose-headings:font-semibold prose-headings:mt-2 prose-headings:mb-1
+                          prose-h2:text-base prose-h2:border-b prose-h2:border-gray-200 prose-h2:pb-1
+                          prose-h3:text-sm
+                          prose-p:text-gray-700 prose-p:my-1 prose-p:leading-relaxed prose-p:text-sm
                           prose-strong:text-gray-900 prose-strong:font-semibold
-                          prose-ul:my-2 prose-ul:space-y-1
-                          prose-ol:my-2 prose-ol:space-y-1
-                          prose-li:text-gray-700 prose-li:my-0
-                          prose-table:my-4 prose-table:border-collapse prose-table:w-full
-                          prose-th:bg-gray-100 prose-th:text-gray-900 prose-th:font-semibold prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:border prose-th:border-gray-200
-                          prose-td:px-3 prose-td:py-2 prose-td:border prose-td:border-gray-200 prose-td:text-gray-700
-                          prose-blockquote:border-l-4 prose-blockquote:border-teal-500 prose-blockquote:bg-teal-50 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:my-3 prose-blockquote:italic prose-blockquote:text-gray-700
-                          prose-code:bg-gray-100 prose-code:text-teal-700 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
-                          prose-hr:border-gray-200 prose-hr:my-4
+                          prose-ul:my-1 prose-ul:space-y-0.5
+                          prose-ol:my-1 prose-ol:space-y-0.5
+                          prose-li:text-gray-700 prose-li:my-0 prose-li:text-sm
+                          prose-table:my-2 prose-table:border-collapse prose-table:w-full prose-table:text-xs
+                          prose-th:bg-gray-100 prose-th:text-gray-900 prose-th:font-semibold prose-th:px-2 prose-th:py-1 prose-th:text-left prose-th:border prose-th:border-gray-200
+                          prose-td:px-2 prose-td:py-1 prose-td:border prose-td:border-gray-200 prose-td:text-gray-700
+                          prose-blockquote:border-l-4 prose-blockquote:border-teal-500 prose-blockquote:bg-teal-50 prose-blockquote:pl-3 prose-blockquote:py-1 prose-blockquote:my-2 prose-blockquote:italic prose-blockquote:text-gray-700 prose-blockquote:text-sm
+                          prose-code:bg-gray-100 prose-code:text-teal-700 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none
+                          prose-hr:border-gray-200 prose-hr:my-2
                           prose-a:text-teal-600 prose-a:no-underline hover:prose-a:underline
                         ">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -619,16 +622,16 @@ Please be specific with product names and prices in SGD where possible.`,
                         </ReactMarkdown>
                       </div>
                     </div>
-                    <div className="pt-4 border-t border-gray-100 flex gap-2">
+                    <div className="pt-3 border-t border-gray-100 flex gap-2 flex-shrink-0">
                       <button
                         onClick={getAIRecommendations}
-                        className="flex-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+                        className="flex-1 px-2 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
                       >
                         Refresh
                       </button>
                       <a
                         href="/chat"
-                        className="flex-1 px-3 py-2 text-sm bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors text-center"
+                        className="flex-1 px-2 py-1.5 text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors text-center"
                       >
                         Chat for More
                       </a>
@@ -638,28 +641,6 @@ Please be specific with product names and prices in SGD where possible.`,
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Help Section */}
-      <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-6 border border-teal-100">
-        <div className="flex flex-col md:flex-row items-center gap-6">
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Need Help Understanding Your Usage?</h3>
-            <p className="text-gray-600">
-              Our AI assistant can analyze your bills, explain your consumption patterns,
-              and provide personalized recommendations to help you save.
-            </p>
-          </div>
-          <a
-            href="/chat"
-            className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-            Chat with AI Assistant
-          </a>
         </div>
       </div>
     </div>
