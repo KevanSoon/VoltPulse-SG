@@ -93,7 +93,7 @@ SEALION_ENDPOINT=your-sealion-endpoint
 # Tavily API (for web search)
 TAVILY_API_KEY=your_tavily_api_key
 
-# OpenAI (optional, for fallback)
+# OpenAI 
 OPENAI_API_KEY=your_openai_api_key
 ```
 
@@ -116,7 +116,7 @@ NEXT_PUBLIC_BACKEND_URL=http://localhost:7860
 **Terminal 1 - Backend:**
 ```bash
 cd backend
-python app.py
+uvicorn app:app --reload --port 7860
 # Backend runs on http://localhost:7860
 ```
 
@@ -158,42 +158,6 @@ After upload, you'll be redirected to the **Analytics Dashboard** where you can:
   - *"Find air conditioner retailers near Tampines"*
   - *"What appliances are eligible for Climate Vouchers?"*
 
-### Example API Calls
-```bash
-# Chat with AI
-curl -X POST http://localhost:7860/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "How can I save electricity?", "thread_id": "user123"}'
-
-# Process OCR
-curl -X POST http://localhost:7860/ocr/process \
-  -F "file=@utility_bill.jpg"
-
-# Search retailers
-curl "http://localhost:7860/retailers/search?query=air%20conditioner&location=Tampines"
-```
-
----
-
-## Deployment Instructions
-
-### Docker Deployment
-
-**Backend:**
-```bash
-cd backend
-docker build -t voltpulse-backend .
-docker run -p 7860:7860 --env-file .env voltpulse-backend
-```
-
-**Frontend:**
-```bash
-cd frontend
-npm run build
-npm start
-# Or deploy to Vercel:
-npx vercel --prod
-```
 
 ### Cloud Deployment Options
 
@@ -258,7 +222,7 @@ Ensure all environment variables are set as secrets in your deployment platform.
 - [ ] Community benchmarking by estate/block
 
 ### License
-This project is developed for the [Hackathon Name] 2026.
+This project is developed for the SMU Hack For Cities 2026.
 
 ---
 
