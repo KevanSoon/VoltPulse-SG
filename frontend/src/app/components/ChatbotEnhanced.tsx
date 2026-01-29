@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { ThumbsUp, ThumbsDown, Copy, Share2, RotateCcw, Sparkles } from "lucide-react";
 
 interface Message {
@@ -216,10 +218,48 @@ export default function Chatbot({ userId = "default_user", threadId = "default_t
                     className={`px-4 py-2 rounded-2xl ${
                       message.role === "user"
                         ? "bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-br-md"
-                        : "bg-white text-slate-800 rounded-bl-md border border-slate-200 shadow-sm"
+                        : "bg-white text-slate-800 rounded-bl-md border border-slate-200 shadow-sm overflow-hidden"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                    {message.role === "assistant" ? (
+                      <div className="prose prose-sm max-w-none text-sm
+                        prose-p:my-1 prose-p:leading-relaxed
+                        prose-ul:my-1 prose-ol:my-1
+                        prose-li:my-0
+                        prose-headings:mt-2 prose-headings:mb-1
+                        prose-a:text-teal-600
+                      ">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            table: ({ children }) => (
+                              <div className="overflow-x-auto -mx-2 px-2 my-2">
+                                <table className="min-w-full text-xs border-collapse border border-slate-200 rounded overflow-hidden">
+                                  {children}
+                                </table>
+                              </div>
+                            ),
+                            thead: ({ children }) => (
+                              <thead className="bg-slate-50">{children}</thead>
+                            ),
+                            th: ({ children }) => (
+                              <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
+                                {children}
+                              </th>
+                            ),
+                            td: ({ children }) => (
+                              <td className="px-2 py-1.5 text-slate-700 border-b border-slate-100 whitespace-nowrap">
+                                {children}
+                              </td>
+                            ),
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                    )}
                   </div>
                   
                   {/* Message Actions (for assistant messages) */}

@@ -77,6 +77,7 @@ class OCRResponse(BaseModel):
     source_id: str
     extraction_data: Optional[Dict[str, Any]] = None
     extraction_confidence: float = 0.0
+    diagnosis: Optional[Dict[str, Any]] = None
 
 
 # ============================================================================
@@ -562,6 +563,16 @@ async def process_ocr(file: UploadFile = File(...)):
                 "extraction_data": extraction_dict
             }
 
+            # Generate diagnosis for the extracted bill data
+            from services.bill_diagnosis import BillDiagnosisService
+
+            diagnosis_service = BillDiagnosisService()
+            diagnosis_result = await diagnosis_service.diagnose(extraction)
+            diagnosis_dict = diagnosis_result.model_dump()
+
+            # Add diagnosis to form_data
+            form_data["diagnosis"] = diagnosis_dict
+
             await vector_store.store_embedding(
                 form_id=source_id,
                 form_type="utility_bill",
@@ -572,13 +583,25 @@ async def process_ocr(file: UploadFile = File(...)):
             print(f"[OK] Vision extraction stored: {source_id}")
             print(f"    - Confidence: {extraction.extraction_confidence:.0%}")
             print(f"    - Consumption trends: {len(extraction.consumption_trends)} services")
+            print(f"    - Health score: {diagnosis_result.overall_health_score:.0f}/100 ({diagnosis_result.health_grade})")
+
+        # Generate diagnosis even if embedding not stored (for response)
+        diagnosis_dict = None
+        if 'diagnosis_result' not in locals():
+            from services.bill_diagnosis import BillDiagnosisService
+            diagnosis_service = BillDiagnosisService()
+            diagnosis_result = await diagnosis_service.diagnose(extraction)
+            diagnosis_dict = diagnosis_result.model_dump()
+        else:
+            diagnosis_dict = diagnosis_result.model_dump()
 
         return OCRResponse(
             extracted_texts=extracted_texts,
             embedding_stored=embedding_stored,
             source_id=source_id,
             extraction_data=extraction_dict,
-            extraction_confidence=extraction.extraction_confidence
+            extraction_confidence=extraction.extraction_confidence,
+            diagnosis=diagnosis_dict
         )
 
     except Exception as e:
@@ -1088,6 +1111,131 @@ async def list_retailer_tools():
         "total": len(tools_info),
         "tavily_enabled": os.getenv("TAVILY_API_KEY") is not None
     }
+
+
+# ============================================================================
+# ROI Calculator Endpoints
+# ============================================================================
+
+class ROICalculationRequest(BaseModel):
+    """Request for ROI calculation."""
+    product_type: str = Field(..., description="Type of appliance (e.g., 'air_conditioners', 'refrigerators')")
+    current_rating: int = Field(0, ge=0, le=5, description="Current appliance tick rating (0 for unknown/old)")
+    new_rating: int = Field(..., ge=1, le=5, description="New appliance tick rating")
+    product_price: float = Field(..., gt=0, description="Price of new appliance in SGD")
+    apply_voucher: bool = Field(True, description="Whether to apply Climate Voucher")
+    custom_voucher_amount: Optional[float] = Field(None, description="Custom voucher amount if different from $300")
+
+
+@app.post("/retailers/roi/calculate")
+async def calculate_roi(request: ROICalculationRequest):
+    """
+    Calculate ROI for an appliance upgrade with Climate Voucher.
+
+    Returns detailed analysis including:
+    - Annual energy and cost savings
+    - Payback period
+    - 5-year and 10-year net benefits
+    - Voucher eligibility status
+    """
+    from services.roi_calculator import ROICalculator
+
+    try:
+        calculator = ROICalculator()
+        result = calculator.calculate(
+            product_type=request.product_type,
+            current_rating=request.current_rating,
+            new_rating=request.new_rating,
+            product_price=request.product_price,
+            apply_voucher=request.apply_voucher,
+            custom_voucher_amount=request.custom_voucher_amount
+        )
+        return result.model_dump()
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/retailers/roi/products")
+async def list_roi_products():
+    """
+    List all product types supported by the ROI calculator.
+
+    Returns information about each product including tick rating ranges
+    and typical price ranges.
+    """
+    from services.roi_calculator import ROICalculator
+
+    calculator = ROICalculator()
+    return {
+        "products": calculator.get_all_products(),
+        "voucher_value": calculator.voucher_value,
+        "electricity_rate": calculator.electricity_rate
+    }
+
+
+@app.get("/retailers/roi/product/{product_type}")
+async def get_roi_product_info(product_type: str):
+    """
+    Get detailed information about a specific product type for ROI calculation.
+    """
+    from services.roi_calculator import ROICalculator
+
+    calculator = ROICalculator()
+    info = calculator.get_product_info(product_type)
+
+    if "error" in info:
+        raise HTTPException(status_code=404, detail=info["error"])
+
+    return info
+
+
+@app.get("/retailers/roi/recommendations/{source_id}")
+async def get_roi_recommendations(source_id: str, budget_max: float = 2000.0):
+    """
+    Get personalized appliance upgrade recommendations based on a user's bill diagnosis.
+
+    Uses the diagnosis from a stored OCR result to recommend appliances
+    that would have the highest impact on the user's energy bills.
+    """
+    if not vector_store:
+        raise HTTPException(status_code=503, detail="Database not connected")
+
+    # Get the stored OCR result
+    result = await vector_store.get_embedding(source_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"OCR result {source_id} not found")
+
+    # Get diagnosis from stored data
+    diagnosis_data = result.form_data.get("diagnosis")
+    if not diagnosis_data:
+        raise HTTPException(status_code=404, detail="No diagnosis found for this bill. Please re-upload.")
+
+    from services.roi_calculator import ROICalculator
+    from models.diagnosis import DiagnosisResult
+
+    try:
+        # Reconstruct diagnosis object
+        diagnosis = DiagnosisResult(**diagnosis_data)
+
+        calculator = ROICalculator()
+        recommendations = calculator.recommend_from_diagnosis(diagnosis, budget_max)
+
+        return {
+            "source_id": source_id,
+            "budget_max": budget_max,
+            "recommendations": [r.model_dump() for r in recommendations],
+            "total_recommendations": len(recommendations)
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================

@@ -45,6 +45,63 @@ export interface ExtractionData {
   extraction_warnings: string[];
 }
 
+// Diagnosis types
+export type Severity = "low" | "medium" | "high";
+export type AnomalyType = "spike" | "high_consumption" | "unusual_pattern" | "billing_discrepancy";
+export type RecommendationCategory = "behavior" | "appliance" | "maintenance" | "monitoring";
+
+export interface AnomalyFlag {
+  type: AnomalyType;
+  severity: Severity;
+  description: string;
+  affected_utility: string;
+  value: number;
+  threshold: number;
+  deviation_percent: number | null;
+}
+
+export interface EfficiencyIssue {
+  utility_type: string;
+  current_value: number;
+  national_average: number;
+  neighbour_average: number | null;
+  deviation_percent: number;
+  severity: Severity;
+  potential_monthly_savings_sgd: number;
+  potential_annual_savings_sgd: number;
+}
+
+export interface TrendWarning {
+  utility_type: string;
+  trend_direction: string;
+  months_affected: number;
+  average_monthly_change_percent: number | null;
+  description: string;
+  severity: Severity;
+}
+
+export interface Recommendation {
+  category: RecommendationCategory;
+  title: string;
+  description: string;
+  potential_savings_percent: number | null;
+  priority: number;
+}
+
+export interface DiagnosisResult {
+  anomalies: AnomalyFlag[];
+  efficiency_issues: EfficiencyIssue[];
+  trend_warnings: TrendWarning[];
+  overall_health_score: number;
+  health_grade: string;
+  recommendations: Recommendation[];
+  summary: string;
+  diagnosis_timestamp: string;
+  utilities_analyzed: string[];
+  total_potential_monthly_savings_sgd: number;
+  total_potential_annual_savings_sgd: number;
+}
+
 export interface FormData {
   source_type: string;
   original_filename: string;
@@ -52,6 +109,7 @@ export interface FormData {
   text_count: number;
   combined_text: string;
   extraction_data: ExtractionData;
+  diagnosis?: DiagnosisResult;
 }
 
 export interface OCRResult {
@@ -94,4 +152,44 @@ export interface UtilityData {
   unit: string;
   trendDirection: "increasing" | "decreasing" | "stable";
   chartData: ChartData[];
+}
+
+// ROI Calculator types
+export interface ROIProduct {
+  product_type: string;
+  display_name: string;
+  min_voucher_tick: number;
+  max_ticks: number;
+  typical_price_range: [number, number];
+}
+
+export interface ROIResult {
+  product_type: string;
+  product_display_name: string;
+  current_rating: number;
+  new_rating: number;
+  tick_improvement: number;
+  product_price: number;
+  voucher_amount: number;
+  net_cost: number;
+  annual_energy_savings_kwh: number;
+  annual_savings_sgd: number;
+  monthly_savings_sgd: number;
+  payback_period_months: number;
+  payback_period_years: number;
+  net_benefit_5_years: number;
+  net_benefit_10_years: number;
+  roi_percent_annual: number;
+  is_voucher_eligible: boolean;
+  minimum_rating_for_voucher: number;
+  notes: string[];
+}
+
+export interface UpgradeRecommendation {
+  product_type: string;
+  product_display_name: string;
+  reason: string;
+  estimated_annual_savings: number;
+  priority: number;
+  roi_if_upgraded: ROIResult | null;
 }

@@ -33,9 +33,19 @@ const SINGAPORE_CONSUMPTION_DATA = [
   { name: "Seletar", lat: 1.4049, lng: 103.8679, consumption: 280, district: "28" },
 ];
 
+export interface HeatmapDataPoint {
+  name: string;
+  lat: number;
+  lng: number;
+  consumption: number;
+  district: string;
+  household_count?: number;
+}
+
 interface HeatmapProps {
   dateRange?: { start: Date; end: Date } | null;
   fullHeight?: boolean;
+  data?: HeatmapDataPoint[];
 }
 
 // Dynamic import for Leaflet components to avoid SSR issues
@@ -97,13 +107,16 @@ function getConsumptionRadius(consumption: number): number {
   return Math.min(25, Math.max(8, consumption / 40));
 }
 
-export default function SingaporeHeatmap({ dateRange, fullHeight = false }: HeatmapProps) {
+export default function SingaporeHeatmap({ dateRange, fullHeight = false, data }: HeatmapProps) {
   const [mounted, setMounted] = useState(false);
-  const [selectedDistrict, setSelectedDistrict] = useState<typeof SINGAPORE_CONSUMPTION_DATA[0] | null>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState<HeatmapDataPoint | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Use provided data or fall back to hardcoded data
+  const mapData: HeatmapDataPoint[] = data || SINGAPORE_CONSUMPTION_DATA;
 
   if (!mounted) {
     return (
@@ -115,10 +128,10 @@ export default function SingaporeHeatmap({ dateRange, fullHeight = false }: Heat
 
   // Calculate stats
   const avgConsumption = Math.round(
-    SINGAPORE_CONSUMPTION_DATA.reduce((sum, d) => sum + d.consumption, 0) / SINGAPORE_CONSUMPTION_DATA.length
+    mapData.reduce((sum, d) => sum + d.consumption, 0) / mapData.length
   );
-  const maxConsumption = Math.max(...SINGAPORE_CONSUMPTION_DATA.map(d => d.consumption));
-  const minConsumption = Math.min(...SINGAPORE_CONSUMPTION_DATA.map(d => d.consumption));
+  const maxConsumption = Math.max(...mapData.map(d => d.consumption));
+  const minConsumption = Math.min(...mapData.map(d => d.consumption));
 
   const mapContent = (
     <>
@@ -129,18 +142,20 @@ export default function SingaporeHeatmap({ dateRange, fullHeight = false }: Heat
         crossOrigin=""
       />
       <MapContainer
+        key="singapore-heatmap"
         center={[1.3521, 103.8198]}
         zoom={11}
         style={{ height: "100%", width: "100%" }}
         scrollWheelZoom={true}
       >
         <TileLayer
+          key="osm-tile-layer"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {SINGAPORE_CONSUMPTION_DATA.map((location) => (
+        {mapData.map((location, index) => (
           <CircleMarker
-            key={location.district}
+            key={`district-${location.district}-${index}`}
             center={[location.lat, location.lng]}
             radius={getConsumptionRadius(location.consumption)}
             pathOptions={{
@@ -160,6 +175,11 @@ export default function SingaporeHeatmap({ dateRange, fullHeight = false }: Heat
                 <p className="text-gray-900 font-medium mt-1">
                   {location.consumption} kWh/month
                 </p>
+                {location.household_count && (
+                  <p className="text-gray-500 text-xs mt-1">
+                    {location.household_count} households
+                  </p>
+                )}
               </div>
             </Popup>
           </CircleMarker>
@@ -191,19 +211,19 @@ export default function SingaporeHeatmap({ dateRange, fullHeight = false }: Heat
           <p className="text-xs text-gray-500">Lowest</p>
           <p className="text-lg font-bold text-teal-600">{minConsumption} kWh</p>
           <p className="text-xs text-gray-500">
-            {SINGAPORE_CONSUMPTION_DATA.find(d => d.consumption === minConsumption)?.name}
+            {mapData.find(d => d.consumption === minConsumption)?.name}
           </p>
         </div>
         <div className="bg-gray-50 rounded-lg p-3 text-center">
           <p className="text-xs text-gray-500">Average</p>
           <p className="text-lg font-bold text-gray-700">{avgConsumption} kWh</p>
-          <p className="text-xs text-gray-500">Across all districts</p>
+          <p className="text-xs text-gray-500">Across {mapData.length} districts</p>
         </div>
         <div className="bg-red-50 rounded-lg p-3 text-center">
           <p className="text-xs text-gray-500">Highest</p>
           <p className="text-lg font-bold text-red-600">{maxConsumption} kWh</p>
           <p className="text-xs text-gray-500">
-            {SINGAPORE_CONSUMPTION_DATA.find(d => d.consumption === maxConsumption)?.name}
+            {mapData.find(d => d.consumption === maxConsumption)?.name}
           </p>
         </div>
       </div>

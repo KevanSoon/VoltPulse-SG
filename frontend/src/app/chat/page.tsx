@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
@@ -50,11 +51,13 @@ const breadcrumbItems = [
   { label: "Chat", href: "/chat" },
 ];
 
-export default function ChatPage() {
+function ChatContent() {
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [hasProcessedQuery, setHasProcessedQuery] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -75,6 +78,72 @@ export default function ChatPage() {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [input]);
+
+  // Function to send a message directly (for pre-filled queries)
+  const sendMessageDirect = async (messageContent: string) => {
+    if (!messageContent.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: messageContent.trim(),
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: userMessage.content,
+          user_id: userId,
+          thread_id: threadId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get response");
+      }
+
+      const data = await response.json();
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.response || "Sorry, I couldn't process your request.",
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Sorry, something went wrong. Please try again.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle pre-filled query from URL parameters (e.g., from ROI Calculator)
+  useEffect(() => {
+    const query = searchParams.get("query");
+    if (query && !hasProcessedQuery && messages.length === 0) {
+      setHasProcessedQuery(true);
+      // Small delay to ensure the component is fully mounted
+      setTimeout(() => {
+        sendMessageDirect(decodeURIComponent(query));
+      }, 100);
+    }
+  }, [searchParams, hasProcessedQuery, messages.length]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -312,7 +381,7 @@ export default function ChatPage() {
                         }`}
                     >
                       {message.role === "assistant" ? (
-                        <div className="prose prose-sm max-w-none
+                        <div className="prose prose-sm max-w-none overflow-hidden
                             prose-headings:text-gray-900 prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2
                           prose-h2:text-lg prose-h2:border-b prose-h2:border-gray-200 prose-h2:pb-2
                           prose-h3:text-base
@@ -321,16 +390,37 @@ export default function ChatPage() {
                           prose-ul:my-2 prose-ul:space-y-1
                           prose-ol:my-2 prose-ol:space-y-1
                           prose-li:text-gray-700 prose-li:my-0
-                          prose-table:my-4 prose-table:border-collapse prose-table:w-full
-                          prose-th:bg-gray-100 prose-th:text-gray-900 prose-th:font-semibold prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:border prose-th:border-gray-200
-                          prose-td:px-3 prose-td:py-2 prose-td:border prose-td:border-gray-200 prose-td:text-gray-700
                           prose-blockquote:border-l-4 prose-blockquote:border-teal-500 prose-blockquote:bg-teal-50 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:my-3 prose-blockquote:italic prose-blockquote:text-gray-700
                           prose-code:bg-gray-100 prose-code:text-teal-700 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
                           prose-pre:bg-slate-100 prose-pre:text-slate-800 prose-pre:p-4 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-pre:border prose-pre:border-slate-200
                           prose-hr:border-gray-200 prose-hr:my-4
                           prose-a:text-teal-600 prose-a:no-underline hover:prose-a:underline
                         ">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              table: ({ children }) => (
+                                <div className="overflow-x-auto -mx-2 px-2 my-4">
+                                  <table className="min-w-full text-sm border-collapse border border-gray-200 rounded-lg overflow-hidden">
+                                    {children}
+                                  </table>
+                                </div>
+                              ),
+                              thead: ({ children }) => (
+                                <thead className="bg-gray-50">{children}</thead>
+                              ),
+                              th: ({ children }) => (
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
+                                  {children}
+                                </th>
+                              ),
+                              td: ({ children }) => (
+                                <td className="px-3 py-2 text-gray-700 border-b border-gray-100 whitespace-nowrap">
+                                  {children}
+                                </td>
+                              ),
+                            }}
+                          >
                             {message.content}
                           </ReactMarkdown>
                         </div>
@@ -456,5 +546,21 @@ export default function ChatPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+// Wrap with Suspense for useSearchParams
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col h-screen bg-white">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full" />
+        </div>
+      </div>
+    }>
+      <ChatContent />
+    </Suspense>
   );
 }

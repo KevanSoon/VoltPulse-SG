@@ -598,6 +598,75 @@ async def get_energy_rating_info(product_type: str) -> str:
     return json.dumps(info, indent=2, ensure_ascii=False)
 
 
+@tool
+async def calculate_appliance_roi(
+    product_type: str,
+    current_rating: int,
+    new_rating: int,
+    product_price: float,
+    apply_voucher: bool = True,
+) -> str:
+    """Calculate ROI for upgrading to an energy-efficient appliance.
+
+    Use this tool to help users understand the financial benefits of
+    upgrading their appliances using Climate Vouchers.
+
+    Args:
+        product_type: Type of appliance (e.g., "aircon", "refrigerator", "washing machine")
+        current_rating: Current appliance tick rating (0-5, use 0 for old/unknown)
+        new_rating: New appliance tick rating (1-5)
+        product_price: Price of new appliance in SGD
+        apply_voucher: Whether to apply $300 Climate Voucher (default: True)
+
+    Returns:
+        JSON with ROI analysis including annual savings, payback period,
+        and long-term benefits
+    """
+    print(f"[Retailer RAG] calculate_appliance_roi - {product_type}: {current_rating}-tick → {new_rating}-tick @ ${product_price}")
+
+    try:
+        from services.roi_calculator import ROICalculator
+
+        calculator = ROICalculator()
+        result = calculator.calculate(
+            product_type=product_type,
+            current_rating=current_rating,
+            new_rating=new_rating,
+            product_price=product_price,
+            apply_voucher=apply_voucher
+        )
+
+        # Format a user-friendly response
+        output = {
+            "product": result.product_display_name,
+            "upgrade": f"{current_rating}-tick → {new_rating}-tick",
+            "cost_breakdown": {
+                "product_price": f"${result.product_price:.2f}",
+                "climate_voucher": f"-${result.voucher_amount:.2f}" if result.voucher_amount > 0 else "Not eligible",
+                "your_cost": f"${result.net_cost:.2f}"
+            },
+            "annual_savings": {
+                "energy_kwh": f"{result.annual_energy_savings_kwh:.0f} kWh",
+                "cost_sgd": f"${result.annual_savings_sgd:.2f}"
+            },
+            "roi_analysis": {
+                "payback_period": f"{result.payback_period_months} months ({result.payback_period_years:.1f} years)",
+                "5_year_benefit": f"${result.net_benefit_5_years:.2f}",
+                "10_year_benefit": f"${result.net_benefit_10_years:.2f}",
+                "annual_roi": f"{result.roi_percent_annual:.1f}%"
+            },
+            "voucher_eligible": result.is_voucher_eligible,
+            "notes": result.notes
+        }
+
+        return json.dumps(output, indent=2, ensure_ascii=False)
+
+    except ValueError as e:
+        return json.dumps({"error": str(e)}, indent=2)
+    except Exception as e:
+        return json.dumps({"error": f"ROI calculation failed: {str(e)}"}, indent=2)
+
+
 # Export all retailer tools
 RETAILER_TOOLS = [
     search_climate_voucher_retailers,
@@ -606,4 +675,5 @@ RETAILER_TOOLS = [
     get_retailer_promotions,
     compare_appliances_across_retailers,
     get_energy_rating_info,
+    calculate_appliance_roi,
 ]

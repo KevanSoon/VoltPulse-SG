@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Download, Share2, RefreshCw, HelpCircle, Info } from "lucide-react";
 import StatsCard from "./components/StatsCard";
 import ViewToggle, { ViewMode } from "./components/ViewToggle";
 import UtilityToggle, { UtilityType } from "./components/UtilityToggle";
 import BillSummary from "./components/BillSummary";
 import MonthlyConsumptionChart from "./components/MonthlyConsumptionChart";
-import { OCRResult, BillData, ChartData, UtilityData } from "./types";
+import DiagnosisPanel from "./components/DiagnosisPanel";
+import ROICalculator from "./components/ROICalculator";
+import { OCRResult, BillData, ChartData, UtilityData, DiagnosisResult } from "./types";
 import Breadcrumb from "../components/Breadcrumb";
 import { SkeletonDashboard } from "../components/Skeleton";
 
@@ -148,12 +148,9 @@ export default function AnalyticsDashboard() {
   const [ocrData, setOcrData] = useState<OCRResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showRecommendations, setShowRecommendations] = useState(false);
-  const [aiRecommendations, setAiRecommendations] = useState<string | null>(null);
-  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'summary' | 'monthly'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'monthly' | 'diagnosis' | 'roi'>('summary');
 
   // Toggle section collapse
   const toggleSection = (section: string) => {
@@ -237,6 +234,7 @@ export default function AnalyticsDashboard() {
   const billData = ocrData ? transformOCRToBillData(ocrData) : null;
   const utilityData = ocrData ? transformOCRToUtilityData(ocrData, utilityType) : null;
   const chartData = utilityData?.chartData || [];
+  const diagnosisData: DiagnosisResult | null = ocrData?.form_data?.diagnosis || null;
 
   // Calculate stats from the utility-specific data
   const currentUsage = utilityData?.currentUsage || 0;
@@ -256,46 +254,6 @@ export default function AnalyticsDashboard() {
   const potentialSavings = currentUsage > nationalAverage
     ? Math.round((currentUsage - nationalAverage) * ratePerUnit)
     : 0;
-
-  // Function to get AI recommendations
-  const getAIRecommendations = async () => {
-    setLoadingRecommendations(true);
-    setShowRecommendations(true);
-    try {
-      // Build context from the OCR data
-      const context = ocrData ? {
-        utilityType,
-        currentUsage,
-        nationalAverage,
-        usageChange,
-        providerName: billData?.providerName,
-        address: billData?.address,
-      } : null;
-
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: `Based on my ${utilityType} usage of ${currentUsage} ${unit} (which is ${vsNational.toFixed(1)}% ${vsNational > 0 ? 'above' : 'below'} the national average of ${nationalAverage} ${unit}), please provide:
-1. Specific energy-efficient appliance recommendations available in Singapore
-2. Estimated savings for each recommendation
-3. Any available government vouchers or rebates I can apply for
-4. Quick tips to reduce my ${utilityType} consumption
-
-Please be specific with product names and prices in SGD where possible.`,
-          context,
-        }),
-      });
-
-      if (!response.ok) throw new Error("Failed to get recommendations");
-      const data = await response.json();
-      setAiRecommendations(data.response || data.message);
-    } catch {
-      setAiRecommendations("Unable to load recommendations. Please try again later or visit the chat page for personalized advice.");
-    } finally {
-      setLoadingRecommendations(false);
-    }
-  };
 
   // Get utility-specific label
   const getUtilityLabel = () => {
@@ -505,25 +463,25 @@ Please be specific with product names and prices in SGD where possible.`,
       </div>
 
       {/* Main Content Grid - Fills remaining space */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
-        {/* Bill Summary & Monthly Consumption - Left Column */}
-        <div className="lg:col-span-2 flex flex-col min-h-0">
+      <div className="flex-1 min-h-0">
+        {/* Bill Summary & Monthly Consumption */}
+        <div className="flex flex-col min-h-0 h-full">
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
             {/* Tab Navigation */}
-            <div className="flex border-b border-gray-200 flex-shrink-0">
+            <div className="flex border-b border-gray-200 flex-shrink-0 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('summary')}
-                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors relative ${
+                className={`flex-1 min-w-[100px] px-3 py-3 text-sm font-medium transition-colors relative ${
                   activeTab === 'summary'
                     ? 'text-teal-600 bg-teal-50/50'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
-                <span className="flex items-center justify-center gap-2">
+                <span className="flex items-center justify-center gap-1.5">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  Bill Summary
+                  <span className="hidden sm:inline">Summary</span>
                 </span>
                 {activeTab === 'summary' && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600" />
@@ -531,19 +489,60 @@ Please be specific with product names and prices in SGD where possible.`,
               </button>
               <button
                 onClick={() => setActiveTab('monthly')}
-                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors relative ${
+                className={`flex-1 min-w-[100px] px-3 py-3 text-sm font-medium transition-colors relative ${
                   activeTab === 'monthly'
                     ? 'text-teal-600 bg-teal-50/50'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
-                <span className="flex items-center justify-center gap-2">
+                <span className="flex items-center justify-center gap-1.5">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
-                  Monthly Trend
+                  <span className="hidden sm:inline">Trend</span>
                 </span>
                 {activeTab === 'monthly' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('diagnosis')}
+                className={`flex-1 min-w-[100px] px-3 py-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'diagnosis'
+                    ? 'text-teal-600 bg-teal-50/50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <span className="flex items-center justify-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="hidden sm:inline">Diagnosis</span>
+                  {diagnosisData && diagnosisData.anomalies.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-100 text-red-600 rounded-full">
+                      {diagnosisData.anomalies.length}
+                    </span>
+                  )}
+                </span>
+                {activeTab === 'diagnosis' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('roi')}
+                className={`flex-1 min-w-[100px] px-3 py-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'roi'
+                    ? 'text-teal-600 bg-teal-50/50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <span className="flex items-center justify-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="hidden sm:inline">ROI Calc</span>
+                </span>
+                {activeTab === 'roi' && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600" />
                 )}
               </button>
@@ -551,9 +550,10 @@ Please be specific with product names and prices in SGD where possible.`,
 
             {/* Tab Content */}
             <div className="p-4 flex-1 overflow-auto">
-              {activeTab === 'summary' ? (
+              {activeTab === 'summary' && (
                 <BillSummary data={billData} />
-              ) : (
+              )}
+              {activeTab === 'monthly' && (
                 <div className="h-full flex flex-col">
                   <p className="text-gray-500 text-sm mb-2">Your {getUtilityLabel().toLowerCase()} usage over the past year</p>
                   <div className="flex-1 min-h-[200px]">
@@ -561,85 +561,45 @@ Please be specific with product names and prices in SGD where possible.`,
                   </div>
                 </div>
               )}
+              {activeTab === 'diagnosis' && (
+                <DiagnosisPanel diagnosis={diagnosisData} />
+              )}
+              {activeTab === 'roi' && (
+                <ROICalculator onFindRetailers={(productType) => {
+                  // Build a contextual search query with the user's address if available
+                  const address = billData?.address;
+                  let searchQuery = `Find ${productType} retailers`;
+                  if (address) {
+                    searchQuery += ` near ${address}`;
+                  } else {
+                    searchQuery += ` near me in Singapore`;
+                  }
+                  searchQuery += ` that accept Climate Voucher`;
+                  window.open(`/chat?query=${encodeURIComponent(searchQuery)}`, '_blank');
+                }} />
+              )}
             </div>
           </div>
-        </div>
 
-        {/* AI Recommendations - Right Column */}
-        <div className="lg:col-span-1 flex flex-col min-h-0">
-          <div className="bg-white rounded-xl p-4 border border-gray-200 flex flex-col flex-1 min-h-0">
-            <h2 className="text-base font-semibold text-gray-900 mb-3 flex-shrink-0">Personalized Recommendations</h2>
-
-            {!showRecommendations ? (
-              <div className="text-center py-4 flex-1 flex flex-col justify-center">
-                <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                </div>
-                <p className="text-gray-600 text-sm mb-3">
-                  Get AI-powered recommendations tailored to your {getUtilityLabel().toLowerCase()} usage.
-                </p>
-                <button
-                  onClick={getAIRecommendations}
-                  className="w-full px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Get Recommendations
-                </button>
+          {/* Chatbot CTA */}
+          <div className="mt-4 bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-teal-100 rounded-lg flex-shrink-0">
+                <svg className="w-5 h-5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
               </div>
-            ) : (
-              <div className="flex-1 flex flex-col min-h-0">
-                {loadingRecommendations ? (
-                  <div className="text-center py-6 flex-1 flex flex-col justify-center">
-                    <div className="animate-spin w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full mx-auto mb-2" />
-                    <p className="text-gray-600 text-xs">Analyzing usage...</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex-1 overflow-y-auto min-h-0">
-                      <div className="prose prose-sm max-w-none
-                          prose-headings:text-gray-900 prose-headings:font-semibold prose-headings:mt-2 prose-headings:mb-1
-                          prose-h2:text-base prose-h2:border-b prose-h2:border-gray-200 prose-h2:pb-1
-                          prose-h3:text-sm
-                          prose-p:text-gray-700 prose-p:my-1 prose-p:leading-relaxed prose-p:text-sm
-                          prose-strong:text-gray-900 prose-strong:font-semibold
-                          prose-ul:my-1 prose-ul:space-y-0.5
-                          prose-ol:my-1 prose-ol:space-y-0.5
-                          prose-li:text-gray-700 prose-li:my-0 prose-li:text-sm
-                          prose-table:my-2 prose-table:border-collapse prose-table:w-full prose-table:text-xs
-                          prose-th:bg-gray-100 prose-th:text-gray-900 prose-th:font-semibold prose-th:px-2 prose-th:py-1 prose-th:text-left prose-th:border prose-th:border-gray-200
-                          prose-td:px-2 prose-td:py-1 prose-td:border prose-td:border-gray-200 prose-td:text-gray-700
-                          prose-blockquote:border-l-4 prose-blockquote:border-teal-500 prose-blockquote:bg-teal-50 prose-blockquote:pl-3 prose-blockquote:py-1 prose-blockquote:my-2 prose-blockquote:italic prose-blockquote:text-gray-700 prose-blockquote:text-sm
-                          prose-code:bg-gray-100 prose-code:text-teal-700 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none
-                          prose-hr:border-gray-200 prose-hr:my-2
-                          prose-a:text-teal-600 prose-a:no-underline hover:prose-a:underline
-                        ">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {aiRecommendations || ""}
-                        </ReactMarkdown>
-                      </div>
-                    </div>
-                    <div className="pt-3 border-t border-gray-100 flex gap-2 flex-shrink-0">
-                      <button
-                        onClick={getAIRecommendations}
-                        className="flex-1 px-2 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
-                      >
-                        Refresh
-                      </button>
-                      <a
-                        href="/chat"
-                        className="flex-1 px-2 py-1.5 text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors text-center"
-                      >
-                        Chat for More
-                      </a>
-                    </div>
-                  </>
-                )}
+              <div className="flex-1">
+                <p className="text-sm font-medium text-teal-900">Have questions about your bill?</p>
+                <p className="text-xs text-teal-700 mt-0.5">Ask our memory-powered AI chatbot for personalized insights and recommendations.</p>
               </div>
-            )}
+              <a
+                href="/chat"
+                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+              >
+                Chat Now
+              </a>
+            </div>
           </div>
         </div>
       </div>
