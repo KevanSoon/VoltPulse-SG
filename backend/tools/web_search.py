@@ -1,14 +1,16 @@
-"""Web search tool for searching charity organization information using OpenAI."""
+"""Web search tool for appliance recommendations using OpenAI's web_search."""
 
-import os
+import json
 from pprint import pprint
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from openai import OpenAI
 from langchain_core.tools import tool
 
 
 # Simple in-memory cache to avoid duplicate searches within a session
 _search_cache: Dict[str, str] = {}
+# Cache for full response objects (with annotations)
+_response_cache: Dict[str, Any] = {}
 
 
 def get_openai_client():
@@ -18,33 +20,60 @@ def get_openai_client():
 
 def clear_search_cache():
     """Clear the search cache. Call this at the start of a new conversation."""
-    global _search_cache
+    global _search_cache, _response_cache
     _search_cache.clear()
-    print("🗑️ Search cache cleared")
+    _response_cache.clear()
 
 
-def openai_web_search(query: str, use_cache: bool = True) -> str:
-    """Perform web search using OpenAI's web_search tool.
+def _extract_citations(response) -> List[Dict[str, str]]:
+    """Extract URL citations from an OpenAI web search response.
+
+    Parses the response output items to find message content with
+    url_citation annotations.
+
+    Args:
+        response: The OpenAI responses API response object
+
+    Returns:
+        List of citation dicts with 'url' and 'title' keys
+    """
+    citations = []
+    seen_urls = set()
+
+    for item in response.output:
+        if getattr(item, "type", None) != "message":
+            continue
+        for content_block in getattr(item, "content", []):
+            for annotation in getattr(content_block, "annotations", []):
+                if getattr(annotation, "type", None) == "url_citation":
+                    url = getattr(annotation, "url", "")
+                    title = getattr(annotation, "title", "")
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        citations.append({"url": url, "title": title})
+
+    return citations
+
+
+def openai_web_search_with_citations(query: str, use_cache: bool = True) -> Dict[str, Any]:
+    """Perform web search using OpenAI and return text + citations.
 
     Args:
         query: The search query
-        use_cache: Whether to use cached results if available
+        use_cache: Whether to use cached results
 
     Returns:
-        Search results as text
+        Dict with 'text' (str) and 'citations' (list of url/title dicts)
     """
-    # Check cache first
     cache_key = query.lower().strip()
-    if use_cache and cache_key in _search_cache:
+    if use_cache and cache_key in _response_cache:
         print("\n" + "=" * 50)
-        print("📦 RETURNING CACHED SEARCH RESULT")
-        print("=" * 50)
-        pprint({"query": query, "cached": True})
+        print("RETURNING CACHED SEARCH RESULT (with citations)")
         print("=" * 50 + "\n")
-        return _search_cache[cache_key]
+        return _response_cache[cache_key]
 
     print("\n" + "=" * 50)
-    print("🔍 OPENAI WEB SEARCH CALLED")
+    print("OPENAI WEB SEARCH (with citations)")
     print("=" * 50)
     pprint({"query": query})
     print("=" * 50 + "\n")
@@ -57,116 +86,81 @@ def openai_web_search(query: str, use_cache: bool = True) -> str:
             tools=[{"type": "web_search"}],
             input=query
         )
-        print("\n" + "-" * 50)
-        print("✅ SEARCH RESULTS RECEIVED")
-        print("-" * 50)
-        pprint({"output_length": len(response.output_text)})
-        print("-" * 50 + "\n")
 
-        # Cache the result
-        _search_cache[cache_key] = response.output_text
+        text = response.output_text
+        citations = _extract_citations(response)
 
-        return response.output_text
+        print(f"Results received: {len(text)} chars, {len(citations)} citations")
+
+        result = {"text": text, "citations": citations}
+
+        # Cache both text and full result
+        _search_cache[cache_key] = text
+        _response_cache[cache_key] = result
+
+        return result
+
     except Exception as e:
-        print(f"\n❌ SEARCH FAILED: {str(e)}\n")
-        return f"Search failed: {str(e)}"
+        print(f"SEARCH FAILED: {str(e)}")
+        return {"text": f"Search failed: {str(e)}", "citations": []}
 
 
 @tool
-def search_charity_comprehensive(charity_name: str) -> str:
-    """Search the web for comprehensive information about a charity organization.
+def search_appliance_recommendations(
+    appliance_type: str,
+    context: Optional[str] = None,
+) -> str:
+    """Search the web for energy-efficient appliance recommendations in Singapore.
 
-    This tool performs a SINGLE optimized search to find ALL relevant information
-    about a charity including:
-    - Mission and programs
-    - Charity ratings (Charity Navigator, GuideStar, BBB)
-    - Financial transparency and accountability
-    - Recent news and impact reports
-    - Contact information and ways to donate
+    Use this tool AFTER finding Climate Voucher retailers via RAG to enrich the
+    response with specific product recommendations, reviews, and buying guides.
 
-    Use this as your PRIMARY tool - it combines general info and ratings in one search.
-
-    Args:
-        charity_name: The name of the charity organization to research.
-                     Example: "Red Cross" or "Doctors Without Borders"
-
-    Returns:
-        Comprehensive search results about the charity including ratings and programs.
-    """
-    print("\n📋 TOOL CALLED: search_charity_comprehensive")
-    pprint({"charity_name": charity_name})
-
-    # Build a comprehensive query that covers all aspects in ONE search
-    comprehensive_query = (
-        f"{charity_name} charity nonprofit organization "
-        f"mission programs impact "
-        f"Charity Navigator rating GuideStar "
-        f"financial transparency accountability review"
-    )
-
-    try:
-        results = openai_web_search(comprehensive_query)
-        return results
-    except Exception as e:
-        return f"Search failed: {str(e)}. Please try again with a different query."
-
-
-@tool
-def search_charity_info(query: str) -> str:
-    """Search the web for information about a charity organization.
-
-    NOTE: Prefer using search_charity_comprehensive for most queries as it
-    combines general info and ratings in a single search.
-
-    Use this tool only when you need to search for something very specific
-    that isn't covered by comprehensive search.
+    This tool searches the web using OpenAI and returns product recommendations
+    along with source URL citations that should be included in the final response.
 
     Args:
-        query: The search query about the charity organization.
-               Example: "Red Cross disaster relief programs 2024"
+        appliance_type: The type of appliance to search for.
+                       Examples: "refrigerator", "air conditioner", "washing machine",
+                                "LED light", "water heater", "ceiling fan"
+        context: Optional extra context to refine the search.
+                Examples: "energy efficient 3-tick", "budget friendly",
+                         "best for 4-room HDB", "inverter technology"
 
     Returns:
-        Search results containing relevant information about the charity.
+        JSON with 'recommendations' (text with product suggestions) and
+        'sources' (list of URLs with titles for citation).
     """
-    print("\n📋 TOOL CALLED: search_charity_info")
-    pprint({"input_query": query})
+    print(f"\n[WebSearch] search_appliance_recommendations - appliance: '{appliance_type}', context: '{context}'")
 
-    # Enhance query for charity-specific searches
-    enhanced_query = f"{query} charity nonprofit organization"
+    # Build a targeted search query for Singapore market
+    query_parts = [
+        f"best energy efficient {appliance_type}",
+        "Singapore 2025 2026",
+        "recommendation review",
+    ]
+    if context:
+        query_parts.insert(1, context)
+
+    query = " ".join(query_parts)
 
     try:
-        results = openai_web_search(enhanced_query)
-        return results
+        result = openai_web_search_with_citations(query)
+
+        output = {
+            "recommendations": result["text"],
+            "sources": result["citations"],
+            "appliance_searched": appliance_type,
+            "search_query": query,
+        }
+
+        return json.dumps(output, indent=2, ensure_ascii=False)
+
     except Exception as e:
-        return f"Search failed: {str(e)}. Please try again with a different query."
+        return json.dumps({
+            "error": f"Appliance search failed: {str(e)}",
+            "appliance_searched": appliance_type,
+        }, indent=2)
 
 
-@tool
-def search_charity_ratings(charity_name: str) -> str:
-    """Search for charity ratings and reviews from watchdog organizations.
-
-    NOTE: Prefer using search_charity_comprehensive as it already includes
-    rating information. Use this only if you specifically need MORE detailed
-    rating information after the comprehensive search.
-
-    Args:
-        charity_name: The name of the charity to look up ratings for.
-
-    Returns:
-        Information about the charity's ratings and accountability.
-    """
-    print("\n⭐ TOOL CALLED: search_charity_ratings")
-    pprint({"charity_name": charity_name})
-
-    query = f"{charity_name} charity rating Charity Navigator GuideStar review"
-
-    try:
-        results = openai_web_search(query)
-        return results
-    except Exception as e:
-        return f"Rating search failed: {str(e)}. Please try again."
-
-
-# List of all available tools for the charity search agent
-# Put comprehensive search FIRST so the LLM prefers it
-CHARITY_SEARCH_TOOLS = [search_charity_comprehensive, search_charity_info, search_charity_ratings]
+# All appliance/web search tools for the agentic RAG agent
+APPLIANCE_SEARCH_TOOLS = [search_appliance_recommendations]

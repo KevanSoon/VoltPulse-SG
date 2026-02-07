@@ -15,105 +15,72 @@ from langgraph.store.base import BaseStore
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from tools.rag_tools import RAG_TOOLS, set_rag_dependencies
+from tools.retailer_tools import RETAILER_TOOLS, set_retailer_dependencies
 
-# Try to import retailer tools
+# Try to import appliance web search tools
 try:
-    from tools.retailer_tools import RETAILER_TOOLS, set_retailer_dependencies
-    HAS_RETAILER_TOOLS = True
+    from tools.web_search import APPLIANCE_SEARCH_TOOLS
+    HAS_WEB_SEARCH_TOOLS = True
 except ImportError:
-    HAS_RETAILER_TOOLS = False
-    RETAILER_TOOLS = []
+    HAS_WEB_SEARCH_TOOLS = False
+    APPLIANCE_SEARCH_TOOLS = []
 
 
-AGENTIC_RAG_SYSTEM_PROMPT = """You are an intelligent research agent with access to a vector database containing:
-1. Client profiles with consumption data
-2. Utility bill documents (Singapore electricity bills processed via OCR)
-3. Climate Voucher participating retailers in Singapore
+AGENTIC_RAG_SYSTEM_PROMPT = """You are an intelligent research agent with access to a vector database of Climate Voucher participating retailers in Singapore, and a web search tool for appliance recommendations.
 
-Your goal is to help users find relevant matches, extract consumption data, and recommend Climate Voucher retailers autonomously.
+Your goal is to help users find Climate Voucher retailers and recommend energy-efficient appliances.
 
 ## IMPORTANT: Grounding Rules
 - ONLY recommend retailers, products, and prices that are returned by your tools.
 - NEVER use your own knowledge to suggest retailers, specific products, or prices.
 - If no tool results match the user's request, say you couldn't find any matches rather than guessing.
-- Always cite which tool result your recommendation came from (e.g. "Based on the search results from the vector store...").
+- Always cite which tool result your recommendation came from.
 - Do NOT fabricate retailer names, addresses, or product details that were not in the tool output.
 
 ## Available Tools
 
-### Profile Search Tools
-1. **list_available_categories** - Understand what data exists (countries, providers, types)
-2. **get_statistics** - Get database size and composition
-3. **semantic_search** - Find profiles by natural language query
-4. **filter_by_metadata** - Browse by specific field values
-5. **hybrid_search** - Combine semantic search with filters
-6. **get_document_by_id** - Get full details of a specific document
+### Climate Voucher Retailer Tools (RAG on vector store)
+1. **search_climate_voucher_retailers** - Find retailers where users can spend $300 Climate Vouchers (semantic search on vector store)
+2. **find_retailers_by_product** - Find all retailers selling specific energy-efficient products (filtered retrieval from vector store)
+3. **get_energy_rating_info** - Explain Singapore's energy efficiency tick ratings
+4. **calculate_appliance_roi** - Calculate ROI for upgrading to an energy-efficient appliance
 
-### Consumption Data Tools (for Singapore electricity bills)
-7. **search_utility_bills** - Find stored electricity bills by query
-8. **extract_consumption_data** - Extract kWh, costs, billing period from a bill
-9. **compare_consumption** - Compare usage across multiple bills
+### Appliance Recommendation Web Search Tools
+5. **search_appliance_recommendations** - Search the web for specific appliance product recommendations, reviews, and buying guides (uses OpenAI web search with URL citations)
 
-### Climate Voucher Retailer Tools
-10. **search_climate_voucher_retailers** - Find retailers where users can spend $300 Climate Vouchers
-11. **find_retailers_by_product** - Find all retailers selling specific energy-efficient products
-12. **get_energy_rating_info** - Explain Singapore's energy efficiency tick ratings
-13. **calculate_appliance_roi** - Calculate ROI for upgrading to an energy-efficient appliance
+## Query Strategy
 
-## Search Strategy for Profiles
+When users ask about Climate Vouchers, energy-efficient appliances, or where to buy, follow ALL these steps:
 
-1. **Understand the Request**: Parse what the user is looking for
-2. **Explore Categories**: Use list_available_categories to see what's available
-3. **Initial Search**: Start with semantic_search or hybrid_search
-4. **Evaluate Results**: Check if results match user needs
-5. **Refine if Needed**: Try different queries or filters
-6. **Deep Dive**: Use get_document_by_id for promising candidates
-
-## Consumption Query Strategy
-
-When users ask about electricity bills, usage, or consumption:
-
-1. **Find Bills**: Use search_utility_bills to locate relevant OCR documents
-   - "my electricity bills" → search_utility_bills("electricity bills")
-   - "recent bills" → search_utility_bills("recent electricity")
-
-2. **Extract Data**: Use extract_consumption_data on found bills
-   - Takes source_id from search results
-   - Returns structured data: kWh, costs, billing period, provider
-
-3. **Compare Bills**: Use compare_consumption for trends
-   - Pass list of source_ids to compare
-   - Returns consumption trends, cost analysis
-
-## Climate Voucher Query Strategy
-
-When users ask about Climate Vouchers, energy-efficient appliances, or where to buy:
-
-1. **Find Retailers**: Use search_climate_voucher_retailers with natural language
+1. **Find Retailers via RAG**: Use search_climate_voucher_retailers or find_retailers_by_product to retrieve participating retailers from the vector store
    - "where can I buy an aircon with climate voucher" → search_climate_voucher_retailers("aircon air conditioner")
    - "fridge shops near Bedok" → search_climate_voucher_retailers("refrigerator Bedok")
-
-2. **Filter by Product**: Use find_retailers_by_product for specific categories
    - Products: refrigerators, air_conditioners, dc_fans, led_lights, washing_machines,
      water_closets, sink_bib_taps_mixers, basin_taps_mixers, shower_taps_mixers, heat_pump_water_heaters
 
-3. **Explain Ratings**: Use get_energy_rating_info to explain tick ratings
+2. **Explain Ratings** (if relevant): Use get_energy_rating_info to explain tick ratings
    - Singapore uses 0-5 ticks for aircon, 1-4 ticks for fridges/washers
    - Higher ticks = better energy efficiency
 
-4. **Calculate ROI**: Use calculate_appliance_roi to help users understand upgrade benefits
+3. **Search Web for Appliance Recommendations**: Use search_appliance_recommendations to find specific product suggestions
+   - This searches the web for actual product recommendations, reviews, and buying guides
+   - Returns results with URL citations — ALWAYS include these source links in your response
+   - Use this to complement retailer results with specific product suggestions
 
-### Example Climate Voucher Queries
+4. **Calculate ROI** (if relevant): Use calculate_appliance_roi to help users understand upgrade benefits
+
+### Example Queries
 
 User: "Where can I use my climate voucher to buy a fridge?"
-→ find_retailers_by_product("refrigerator")
-→ List ONLY retailers returned by the tool, with addresses and websites
+→ find_retailers_by_product("refrigerator") — RAG retrieval
+→ search_appliance_recommendations("refrigerator", "energy efficient 3-tick Singapore") — web search
+→ List retailers from RAG AND product recommendations from web search with source URLs
 
 User: "I want to buy an energy efficient aircon, what do you recommend?"
-→ get_energy_rating_info("aircon") - explain tick ratings
-→ search_climate_voucher_retailers("air conditioner")
-→ Present ONLY the retailers and information found in tool results
+→ get_energy_rating_info("aircon") — explain tick ratings
+→ search_climate_voucher_retailers("air conditioner") — RAG retrieval
+→ search_appliance_recommendations("air conditioner", "inverter energy efficient") — web search
+→ Present retailers AND product recommendations with source citations
 
 ### Singapore Climate Voucher Context
 - Every Singapore household receives $300 in Climate Vouchers
@@ -121,19 +88,11 @@ User: "I want to buy an energy efficient aircon, what do you recommend?"
 - Products: fridges, aircons, LED lights, fans, washers, water heaters, taps, toilets
 - Use the tools to find participating retailers — do NOT assume or guess retailer names
 
-### Singapore Electricity Context
-- Providers: SP Services, Geneco, Keppel, Senoko, Tuas Power
-- GST: 9%
-- Bills show: kWh consumed, tariff tiers, total cost in SGD
-
 ## Best Practices
 
-- For profiles: explore categories first, combine semantic + filters
-- For consumption: search bills first, then extract structured data
-- For Climate Vouchers: always use retailer search tools to find participating retailers
+- ALWAYS call retailer RAG tools first to find where to buy, then web search for what to buy
+- When web search returns source citations, ALWAYS include them in your response as clickable links
 - Always explain your search process and findings
-- Present consumption data clearly with units (kWh, SGD)
-- When comparing bills, highlight changes and trends
 - NEVER recommend retailers, products, or prices that were not returned by your tools
 - If tools return no results, tell the user no matches were found — do NOT fill in from your own knowledge"""
 
@@ -148,36 +107,35 @@ class AgenticRAGAgent:
 
     Attributes:
         llm: The language model for reasoning
-        tools: List of RAG tools for vector store exploration
+        tools: List of retailer RAG tools and web search tools
         react_agent: The compiled ReAct agent
         encoder: The embedding encoder
         vector_store: The vector store instance
-        include_retailer_tools: Whether retailer tools are included
     """
 
-    def __init__(self, llm, encoder=None, vector_store=None, include_retailer_tools: bool = True):
+    def __init__(self, llm, encoder=None, vector_store=None):
         """Initialize the Agentic RAG Agent.
 
         Args:
             llm: Language model for reasoning and tool use
             encoder: SeaLion encoder for query embedding (can be set later)
             vector_store: VectorStore instance (can be set later)
-            include_retailer_tools: Whether to include Climate Voucher retailer tools
         """
         self.llm = llm
         self.encoder = encoder
         self.vector_store = vector_store
-        self.include_retailer_tools = include_retailer_tools and HAS_RETAILER_TOOLS
 
-        # Combine tools
-        self.tools = list(RAG_TOOLS)
-        if self.include_retailer_tools:
-            self.tools.extend(RETAILER_TOOLS)
-            print(f"[AgenticRAG] Including {len(RETAILER_TOOLS)} retailer tools")
+        # Combine tools: retailer RAG tools + web search tools
+        self.tools = list(RETAILER_TOOLS)
+        print(f"[AgenticRAG] Including {len(RETAILER_TOOLS)} retailer tools")
 
-        # Initialize dependencies if provided (pass LLM for consumption extraction)
+        if HAS_WEB_SEARCH_TOOLS:
+            self.tools.extend(APPLIANCE_SEARCH_TOOLS)
+            print(f"[AgenticRAG] Including {len(APPLIANCE_SEARCH_TOOLS)} web search tools")
+
+        # Initialize dependencies if provided
         if encoder and vector_store:
-            self.set_dependencies(encoder, vector_store, llm)
+            self.set_dependencies(encoder, vector_store)
 
         # Create the ReAct agent
         self.react_agent = create_react_agent(
@@ -185,22 +143,16 @@ class AgenticRAGAgent:
             tools=self.tools,
         )
 
-    def set_dependencies(self, encoder, vector_store, llm=None):
+    def set_dependencies(self, encoder, vector_store):
         """Set encoder and vector store after initialization.
 
         Args:
             encoder: The SeaLion encoder instance
             vector_store: The VectorStore instance
-            llm: Optional LLM for consumption extraction tools
         """
         self.encoder = encoder
         self.vector_store = vector_store
-        # Pass LLM for consumption extraction tools
-        set_rag_dependencies(encoder, vector_store, llm or self.llm)
-
-        # Also set retailer dependencies if enabled
-        if self.include_retailer_tools and HAS_RETAILER_TOOLS:
-            set_retailer_dependencies(encoder, vector_store)
+        set_retailer_dependencies(encoder, vector_store)
 
     async def retrieve_memories(self, store: BaseStore, user_id: str, query: str) -> str:
         """Fetch relevant memories for this user."""
@@ -328,21 +280,15 @@ class AgenticRAGAgent:
         return {"messages": [{"role": "assistant", "content": response_content}]}
 
 
-def create_agentic_rag_agent(
-    llm,
-    encoder=None,
-    vector_store=None,
-    include_retailer_tools: bool = True
-):
+def create_agentic_rag_agent(llm, encoder=None, vector_store=None):
     """Factory function to create an AgenticRAGAgent instance.
 
     Args:
         llm: Language model for reasoning
         encoder: Optional encoder for query embedding
         vector_store: Optional vector store instance
-        include_retailer_tools: Whether to include Climate Voucher retailer tools
 
     Returns:
         Configured AgenticRAGAgent instance
     """
-    return AgenticRAGAgent(llm, encoder, vector_store, include_retailer_tools)
+    return AgenticRAGAgent(llm, encoder, vector_store)

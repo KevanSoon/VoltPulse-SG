@@ -374,11 +374,13 @@ async def agentic_rag_search(request: AgenticRAGRequest):
 
 @app.get("/rag/tools")
 async def list_rag_tools():
-    """List available RAG tools and their descriptions."""
-    from tools.rag_tools import RAG_TOOLS
+    """List available retailer RAG tools and web search tools."""
+    from tools.retailer_tools import RETAILER_TOOLS
+    from tools.web_search import APPLIANCE_SEARCH_TOOLS
 
+    all_tools = list(RETAILER_TOOLS) + list(APPLIANCE_SEARCH_TOOLS)
     tools_info = []
-    for tool in RAG_TOOLS:
+    for tool in all_tools:
         tools_info.append({
             "name": tool.name,
             "description": tool.description,
@@ -388,26 +390,6 @@ async def list_rag_tools():
         "tools": tools_info,
         "total": len(tools_info)
     }
-
-
-@app.get("/rag/categories")
-async def get_rag_categories():
-    """Get available categories in the vector store for filtering."""
-    if not vector_store:
-        raise HTTPException(status_code=503, detail="Database not connected")
-
-    from tools.rag_tools import list_available_categories, set_rag_dependencies
-
-    # Ensure dependencies are set
-    if encoder and vector_store:
-        set_rag_dependencies(encoder, vector_store)
-
-    try:
-        result = await list_available_categories.ainvoke({})
-        import json
-        return json.loads(result)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================

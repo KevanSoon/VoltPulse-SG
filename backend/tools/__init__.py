@@ -1,24 +1,28 @@
 """Tools for LangGraph agents."""
 
-from .rag_tools import (
-    semantic_search,
-    filter_by_metadata,
-    get_document_by_id,
-    list_available_categories,
-    hybrid_search,
-    get_statistics,
-    RAG_TOOLS,
-    set_rag_dependencies,
+from .retailer_tools import (
+    search_climate_voucher_retailers,
+    find_retailers_by_product,
+    get_energy_rating_info,
+    calculate_appliance_roi,
+    RETAILER_TOOLS,
+    set_retailer_dependencies,
+)
+
+from .web_search import (
+    search_appliance_recommendations,
+    APPLIANCE_SEARCH_TOOLS,
 )
 
 __all__ = [
-    # RAG tools
-    "semantic_search",
-    "filter_by_metadata",
-    "get_document_by_id",
-    "list_available_categories",
-    "hybrid_search",
-    "get_statistics",
-    "RAG_TOOLS",
-    "set_rag_dependencies",
+    # Retailer RAG tools
+    "search_climate_voucher_retailers",
+    "find_retailers_by_product",
+    "get_energy_rating_info",
+    "calculate_appliance_roi",
+    "RETAILER_TOOLS",
+    "set_retailer_dependencies",
+    # Web search tools
+    "search_appliance_recommendations",
+    "APPLIANCE_SEARCH_TOOLS",
 ]
