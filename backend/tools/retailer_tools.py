@@ -1,40 +1,31 @@
-"""Climate Voucher Retailer RAG Tools with Tavily Integration.
+"""Climate Voucher Retailer RAG Tools.
 
 Provides agentic tools for:
 1. Searching Climate Voucher participating retailers
 2. Finding retailers by product category
-3. Using Tavily to search for specific appliance recommendations
-4. Getting current promotions and prices from retailer websites
+3. Getting energy rating information
+4. Calculating appliance upgrade ROI
 """
 
-import os
 import json
 from typing import Optional, List, Dict, Any
 from langchain_core.tools import tool
-from tavily import TavilyClient
 
 # Global references - set at initialization
 _encoder = None
 _vector_store = None
-_tavily_client = None
 
 
-def set_retailer_dependencies(encoder, vector_store, tavily_api_key: Optional[str] = None):
+def set_retailer_dependencies(encoder, vector_store):
     """Initialize retailer tools with dependencies.
 
     Args:
         encoder: SeaLion encoder instance
         vector_store: VectorStore instance
-        tavily_api_key: Optional Tavily API key (falls back to TAVILY_API_KEY env var)
     """
-    global _encoder, _vector_store, _tavily_client
+    global _encoder, _vector_store
     _encoder = encoder
     _vector_store = vector_store
-
-    # Initialize Tavily client
-    api_key = tavily_api_key or os.getenv("TAVILY_API_KEY")
-    if api_key:
-        _tavily_client = TavilyClient(api_key=api_key)
 
 
 # Product category mappings for user-friendly queries
@@ -286,233 +277,6 @@ async def find_retailers_by_product(
 
 
 @tool
-async def search_appliance_recommendations(
-    product_type: str,
-    requirements: Optional[str] = None,
-    budget: Optional[str] = None,
-    brand_preference: Optional[str] = None
-) -> str:
-    """Search for recommended energy-efficient appliances using Tavily web search.
-
-    Use this to find specific product recommendations, reviews, and current prices
-    for Climate Voucher eligible appliances. Searches retailer websites and
-    Singapore consumer review sites.
-
-    Args:
-        product_type: Type of appliance to search for.
-                     Examples: "inverter aircon", "3-tick refrigerator",
-                              "energy efficient washing machine"
-        requirements: Optional specific requirements.
-                     Examples: "4-5 tick rating", "suitable for 4-room HDB",
-                              "quiet operation", "smart features"
-        budget: Optional budget range.
-               Examples: "under $1000", "$500-$800", "best value"
-        brand_preference: Optional brand preference.
-                         Examples: "Daikin", "Mitsubishi", "LG", "Samsung"
-
-    Returns:
-        JSON with product recommendations from web search including:
-        - Product names and models
-        - Prices (where available)
-        - Energy ratings
-        - Retailer links
-        - Key features and reviews
-    """
-    print(f"[Retailer RAG] search_appliance_recommendations - "
-          f"product: '{product_type}', requirements: {requirements}, budget: {budget}")
-
-    if _tavily_client is None:
-        return "Error: Tavily client not initialized. Set TAVILY_API_KEY environment variable."
-
-    try:
-        # Build search query
-        query_parts = [product_type, "Singapore", "climate voucher", "energy efficient"]
-
-        if requirements:
-            query_parts.append(requirements)
-        if budget:
-            query_parts.append(budget)
-        if brand_preference:
-            query_parts.append(brand_preference)
-
-        search_query = " ".join(query_parts)
-
-        # Search using Tavily with advanced depth for better results
-        response = _tavily_client.search(
-            query=search_query,
-            search_depth="advanced",
-            max_results=10,
-            include_domains=[
-                "gaincity.com",
-                "courts.com.sg",
-                "bestdenki.com.sg",
-                "harveynorman.com.sg",
-                "audiohouse.com.sg",
-                "lazada.sg",
-                "shopee.sg",
-                "hardwarezone.com.sg",
-                "nea.gov.sg",  # For official energy label info
-            ]
-        )
-
-        # Format results
-        results = []
-        for item in response.get("results", []):
-            results.append({
-                "title": item.get("title", ""),
-                "url": item.get("url", ""),
-                "snippet": item.get("content", "")[:300] + "..." if len(item.get("content", "")) > 300 else item.get("content", ""),
-                "score": item.get("score", 0)
-            })
-
-        output = {
-            "search_query": search_query,
-            "product_type": product_type,
-            "results_count": len(results),
-            "recommendations": results,
-            "tip": "Check NEA's Energy Label website for official energy ratings: https://www.nea.gov.sg/our-services/climate-change-energy-efficiency/energy-efficiency/household-sector/the-energy-label"
-        }
-
-        return json.dumps(output, indent=2, ensure_ascii=False)
-
-    except Exception as e:
-        return f"Search error: {str(e)}"
-
-
-@tool
-async def get_retailer_promotions(
-    retailer_name: str,
-    product_type: Optional[str] = None
-) -> str:
-    """Search for current promotions at a specific Climate Voucher retailer.
-
-    Use this to find ongoing sales, discounts, or bundle deals at a specific
-    retailer. Helpful for maximizing Climate Voucher value.
-
-    Args:
-        retailer_name: Name of the retailer.
-                      Examples: "Gain City", "Courts", "Best Denki", "Harvey Norman"
-        product_type: Optional product type to focus on.
-                     Examples: "aircon", "refrigerator", "washing machine"
-
-    Returns:
-        JSON with current promotions and deals from the retailer
-    """
-    print(f"[Retailer RAG] get_retailer_promotions - "
-          f"retailer: '{retailer_name}', product: {product_type}")
-
-    if _tavily_client is None:
-        return "Error: Tavily client not initialized. Set TAVILY_API_KEY environment variable."
-
-    try:
-        # Build search query for promotions
-        query_parts = [retailer_name, "Singapore", "promotion", "sale", "2024"]
-
-        if product_type:
-            query_parts.insert(1, product_type)
-
-        search_query = " ".join(query_parts)
-
-        # Search using Tavily
-        response = _tavily_client.search(
-            query=search_query,
-            search_depth="basic",
-            max_results=5
-        )
-
-        results = []
-        for item in response.get("results", []):
-            results.append({
-                "title": item.get("title", ""),
-                "url": item.get("url", ""),
-                "snippet": item.get("content", "")[:400] if item.get("content") else ""
-            })
-
-        output = {
-            "retailer": retailer_name,
-            "product_filter": product_type,
-            "promotions_found": len(results),
-            "results": results,
-            "note": "Promotions may change frequently. Visit the retailer's website for the latest deals."
-        }
-
-        return json.dumps(output, indent=2, ensure_ascii=False)
-
-    except Exception as e:
-        return f"Search error: {str(e)}"
-
-
-@tool
-async def compare_appliances_across_retailers(
-    product_model: str,
-    retailers: Optional[List[str]] = None
-) -> str:
-    """Compare a specific appliance model across different Climate Voucher retailers.
-
-    Use this to find the best price or deal for a specific product model
-    across multiple participating retailers.
-
-    Args:
-        product_model: Specific product model to compare.
-                      Example: "Daikin iSmile Series FTKF25A", "LG F2515STGW"
-        retailers: Optional list of retailers to check.
-                  If not provided, searches major Climate Voucher retailers.
-
-    Returns:
-        JSON comparison of the product across retailers
-    """
-    print(f"[Retailer RAG] compare_appliances_across_retailers - "
-          f"model: '{product_model}'")
-
-    if _tavily_client is None:
-        return "Error: Tavily client not initialized."
-
-    # Default major retailers if not specified
-    if not retailers:
-        retailers = ["Gain City", "Courts", "Best Denki", "Harvey Norman", "Audio House"]
-
-    try:
-        comparisons = []
-
-        for retailer in retailers:
-            search_query = f"{product_model} {retailer} Singapore price"
-
-            response = _tavily_client.search(
-                query=search_query,
-                search_depth="basic",
-                max_results=2
-            )
-
-            if response.get("results"):
-                best_result = response["results"][0]
-                comparisons.append({
-                    "retailer": retailer,
-                    "found": True,
-                    "title": best_result.get("title", ""),
-                    "url": best_result.get("url", ""),
-                    "snippet": best_result.get("content", "")[:200] if best_result.get("content") else ""
-                })
-            else:
-                comparisons.append({
-                    "retailer": retailer,
-                    "found": False,
-                    "note": "Product not found at this retailer"
-                })
-
-        output = {
-            "product_model": product_model,
-            "retailers_checked": len(retailers),
-            "comparison": comparisons,
-            "tip": "Prices may vary. Contact retailers directly for the most accurate quotes."
-        }
-
-        return json.dumps(output, indent=2, ensure_ascii=False)
-
-    except Exception as e:
-        return f"Comparison error: {str(e)}"
-
-
-@tool
 async def get_energy_rating_info(product_type: str) -> str:
     """Get information about energy efficiency ratings for a product type.
 
@@ -671,9 +435,6 @@ async def calculate_appliance_roi(
 RETAILER_TOOLS = [
     search_climate_voucher_retailers,
     find_retailers_by_product,
-    search_appliance_recommendations,
-    get_retailer_promotions,
-    compare_appliances_across_retailers,
     get_energy_rating_info,
     calculate_appliance_roi,
 ]

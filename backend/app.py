@@ -758,14 +758,6 @@ class RetailerLoadRequest(BaseModel):
     use_sample_data: bool = Field(True, description="Use sample data (True) or full PDF parse (False)")
 
 
-class ApplianceSearchRequest(BaseModel):
-    """Request for appliance recommendations via Tavily."""
-    product_type: str = Field(..., description="Type of appliance to search for")
-    requirements: Optional[str] = Field(None, description="Specific requirements")
-    budget: Optional[str] = Field(None, description="Budget range")
-    brand_preference: Optional[str] = Field(None, description="Brand preference")
-
-
 # Global flag for retailer tools initialization
 _retailer_tools_initialized = False
 
@@ -784,15 +776,9 @@ async def init_retailer_tools():
     try:
         from tools.retailer_tools import set_retailer_dependencies
 
-        # Get Tavily API key from environment
-        tavily_key = os.getenv("TAVILY_API_KEY")
-
-        set_retailer_dependencies(encoder, vector_store, tavily_key)
+        set_retailer_dependencies(encoder, vector_store)
         _retailer_tools_initialized = True
         print("[OK] Climate Voucher retailer tools initialized")
-
-        if not tavily_key:
-            print("    [WARN] TAVILY_API_KEY not set - Tavily search features disabled")
 
         return True
 
@@ -1002,72 +988,6 @@ async def find_retailers_by_product(product: str, limit: int = 15):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/retailers/appliances/search")
-async def search_appliance_recommendations(request: ApplianceSearchRequest):
-    """
-    Search for recommended energy-efficient appliances using Tavily web search.
-
-    Find specific product recommendations, reviews, and prices for
-    Climate Voucher eligible appliances from Singapore retailers.
-
-    Requires TAVILY_API_KEY environment variable to be set.
-    """
-    await init_retailer_tools()
-
-    if not _retailer_tools_initialized:
-        raise HTTPException(
-            status_code=503,
-            detail="Retailer tools not available."
-        )
-
-    try:
-        from tools.retailer_tools import search_appliance_recommendations
-        import json
-
-        result = await search_appliance_recommendations.ainvoke({
-            "product_type": request.product_type,
-            "requirements": request.requirements,
-            "budget": request.budget,
-            "brand_preference": request.brand_preference
-        })
-
-        return json.loads(result)
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/retailers/promotions/{retailer_name}")
-async def get_retailer_promotions(retailer_name: str, product_type: Optional[str] = None):
-    """
-    Search for current promotions at a specific Climate Voucher retailer.
-
-    Requires TAVILY_API_KEY environment variable.
-    """
-    await init_retailer_tools()
-
-    if not _retailer_tools_initialized:
-        raise HTTPException(status_code=503, detail="Retailer tools not available.")
-
-    try:
-        from tools.retailer_tools import get_retailer_promotions
-        import json
-
-        result = await get_retailer_promotions.ainvoke({
-            "retailer_name": retailer_name,
-            "product_type": product_type
-        })
-
-        return json.loads(result)
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/retailers/energy-ratings/{product_type}")
 async def get_energy_rating_info(product_type: str):
     """
@@ -1109,7 +1029,7 @@ async def list_retailer_tools():
     return {
         "tools": tools_info,
         "total": len(tools_info),
-        "tavily_enabled": os.getenv("TAVILY_API_KEY") is not None
+        "total_tools": len(tools_info)
     }
 
 
