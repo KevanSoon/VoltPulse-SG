@@ -3,7 +3,11 @@
     "allow": [
       "Bash(npm run build:*)",
       "Bash(curl:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(dir:*)",
+      "Bash(pip show:*)",
+      "Bash(python scripts/diagnose_retailers.py:*)",
+      "Bash(python:*)"
     ]
   }
 }
