@@ -1,10 +1,11 @@
-"""Climate Voucher Retailer RAG Tools.
+"""Agentic RAG Tools for VoltPulse chatbot.
 
-Provides agentic tools for:
-1. Searching Climate Voucher participating retailers
-2. Finding retailers by product category
-3. Getting energy rating information
-4. Calculating appliance upgrade ROI
+Provides 5 standalone tools:
+1. get_user_consumption_info - RAG retrieval of user's consumption data
+2. find_retailers_by_product - Find retailers by product category
+3. get_energy_rating_info - Explain energy efficiency ratings
+4. calculate_appliance_roi - Calculate ROI for appliance upgrades
+5. search_appliance_recommendations - Web search (defined in web_search.py)
 """
 
 import json
@@ -18,9 +19,6 @@ from recommender.rrf_scorer import RRFScorer, ScoredRetailer
 # Global references - set at initialization
 _encoder = None
 _vector_store = None
-
-# A/B testing flag
-USE_RRF = os.getenv("USE_RRF", "true").lower() == "true"
 
 
 def set_retailer_dependencies(encoder, vector_store):
@@ -130,7 +128,7 @@ def _format_retailer_results(
             "website": form_data.get("website"),
             "eligible_products": products_display,
             "remarks": form_data.get("remarks"),
-            "similarity_score": round(result.score, 4),  # Keep for backward compatibility
+            "similarity_score": round(result.score, 4),
         }
 
         # Add RRF component scores if available
@@ -152,127 +150,107 @@ def _format_retailer_results(
 
 
 @tool
-async def search_climate_voucher_retailers(
-    query: str,
-    product_category: Optional[str] = None,
-    planning_area: Optional[str] = None,
-    limit: int = 10
-) -> str:
-    """Search for Climate Voucher participating retailers.
+async def get_user_consumption_info(query: str) -> str:
+    """Retrieve and summarise the user's electricity/utility consumption data.
 
-    Use this to find retailers where users can spend their Singapore Climate Vouchers
-    on energy-efficient appliances. Searches by natural language query and filters.
+    Use this tool when the user asks about their bills, electricity usage,
+    kWh consumption, energy costs, billing periods, or wants a summary of
+    their consumption.
 
-    Singapore's Climate Vouchers are $300 vouchers for households to purchase
-    energy-efficient and water-efficient products from participating retailers.
+    This performs RAG retrieval over the user's stored utility bill documents
+    (uploaded via OCR / Vision) and returns the extracted consumption data.
 
     Args:
-        query: Natural language search query.
-               Examples: "refrigerator shops near Bedok",
-                        "where to buy LED lights in Ang Mo Kio",
-                        "air conditioner retailers accepting climate vouchers"
-        product_category: Optional product filter. Valid values:
-                         - refrigerators, air_conditioners, dc_fans, led_lights
-                         - washing_machines, water_closets
-                         - sink_bib_taps_mixers, basin_taps_mixers, shower_taps_mixers
-                         - heat_pump_water_heaters
-        planning_area: Optional Singapore planning area filter.
-                      Examples: "Bedok", "Ang Mo Kio", "Jurong East"
-        limit: Maximum results (default: 10)
+        query: Natural language query about consumption.
+               Examples: "What was my electricity consumption last month?",
+                        "Show me my utility bills",
+                        "How much kWh did I use?"
 
     Returns:
-        JSON list of matching retailers with:
-        - retailer_name, address, postal_code, planning_area
-        - website URL
-        - eligible_products list
-        - remarks (e.g., "By Appointment", "Accepts vouchers upon delivery")
+        JSON string with consumption data from the user's uploaded bills,
+        including provider, billing period, kWh, costs, and daily averages.
     """
-    print(f"[Retailer RAG] search_climate_voucher_retailers - query: '{query}', "
-          f"product: {product_category}, area: {planning_area}")
+    print(f"[Tool] get_user_consumption_info - query: '{query}'")
 
     if _encoder is None or _vector_store is None:
-        return "Error: Retailer tools not initialized."
+        return "Error: Tools not initialized. Vector store or encoder not available."
 
     try:
-        # Normalize product category if provided
-        normalized_product = None
-        if product_category:
-            normalized_product = _normalize_product_category(product_category)
+        # Encode the user query
+        embedding = await _encoder.encode(query)
 
-        # Enhance query with product context
-        enhanced_query = query
-        if normalized_product:
-            enhanced_query = f"{query} {PRODUCT_DISPLAY_NAMES.get(normalized_product, product_category)}"
-        if planning_area:
-            enhanced_query = f"{enhanced_query} {planning_area} Singapore"
+        # Search for consumption / OCR documents
+        results = await _vector_store.find_similar(
+            query_embedding=embedding,
+            form_type="ocr",
+            limit=5,
+        )
 
-        # Encode query
-        embedding = await _encoder.encode(enhanced_query)
-
-        if USE_RRF:
-            # NEW: RRF-based ranking with multi-signal fusion
-            # Fetch more candidates for better RRF coverage
-            candidates = await _vector_store.find_similar(
-                query_embedding=embedding,
-                form_type="retailer",
-                limit=50,  # Increased for RRF
-            )
-
-            # Apply RRF scoring
-            scorer = RRFScorer()
-            scored_results = await scorer.score_retailers(
-                query_embedding=embedding,
-                query_text=enhanced_query,
-                candidates=candidates,
-                query_product=normalized_product,
-                query_area=planning_area,
-                limit=limit
-            )
-
-            # Convert ScoredRetailer to SimilarityResult for backward compatibility
-            final_results = [r.retailer for r in scored_results]
-            return _format_retailer_results(final_results, rrf_scores=scored_results)
-
-        else:
-            # OLD: Post-filtering approach (fallback)
+        if not results:
+            # Also try the "vision" form type
             results = await _vector_store.find_similar(
                 query_embedding=embedding,
-                form_type="retailer",
-                limit=min(limit * 2, 30),
+                form_type="vision",
+                limit=5,
             )
 
-            # Post-filter by product and area
-            filtered_results = []
-            for result in results:
-                form_data = result.form_data or {}
+        if not results:
+            return json.dumps({
+                "message": "No utility bill documents found. Please upload your electricity bill first via the Upload page.",
+                "documents_found": 0
+            }, indent=2)
 
-                # Product filter
-                if normalized_product:
-                    products = form_data.get("eligible_products", [])
-                    if normalized_product not in products:
-                        continue
+        # Extract and format consumption data from results
+        bills = []
+        for result in results:
+            form_data = result.form_data or {}
 
-                # Planning area filter
-                if planning_area:
-                    retailer_area = form_data.get("planning_area", "").lower()
-                    if planning_area.lower() not in retailer_area:
-                        continue
+            # Check for vision-extracted data
+            extraction_data = form_data.get("extraction_data", {})
+            if extraction_data:
+                bill_info = {
+                    "source_id": result.id,
+                    "original_filename": form_data.get("original_filename", "Unknown"),
+                    "provider": extraction_data.get("provider_name"),
+                    "account_number": extraction_data.get("account_number"),
+                    "billing_period_start": extraction_data.get("billing_period_start"),
+                    "billing_period_end": extraction_data.get("billing_period_end"),
+                    "billing_days": extraction_data.get("billing_days"),
+                    "consumption_kwh": extraction_data.get("consumption_kwh"),
+                    "daily_average_kwh": extraction_data.get("daily_average_kwh"),
+                    "total_amount_sgd": extraction_data.get("total_amount"),
+                    "energy_charges_sgd": extraction_data.get("energy_charges"),
+                    "gst_amount_sgd": extraction_data.get("gst_amount"),
+                    "confidence": extraction_data.get("extraction_confidence"),
+                }
+            else:
+                # Legacy OCR format
+                bill_info = {
+                    "source_id": result.id,
+                    "original_filename": form_data.get("original_filename", "Unknown"),
+                    "provider": form_data.get("provider_name"),
+                    "consumption_kwh": form_data.get("consumption_kwh"),
+                    "total_amount_sgd": form_data.get("total_amount"),
+                    "raw_text_preview": (form_data.get("combined_text", "") or "")[:500],
+                }
 
-                filtered_results.append(result)
+            bills.append(bill_info)
 
-                if len(filtered_results) >= limit:
-                    break
+        output = {
+            "documents_found": len(bills),
+            "bills": bills,
+        }
 
-            return _format_retailer_results(filtered_results)
+        return json.dumps(output, indent=2, ensure_ascii=False)
 
     except Exception as e:
-        return f"Search error: {str(e)}"
+        return json.dumps({"error": f"Consumption retrieval failed: {str(e)}"}, indent=2)
 
 
 @tool
 async def find_retailers_by_product(
     product: str,
-    limit: int = 15
+    limit: int = 800
 ) -> str:
     """Find all retailers selling a specific Climate Voucher eligible product.
 
@@ -283,7 +261,7 @@ async def find_retailers_by_product(
         product: The product type to search for.
                 Examples: "refrigerator", "aircon", "LED light", "washing machine",
                          "water heater", "fan", "toilet", "tap"
-        limit: Maximum number of retailers to return (default: 15)
+        limit: Maximum number of retailers to return (default: 800)
 
     Returns:
         JSON list of retailers selling the specified product, with full details
@@ -302,8 +280,8 @@ async def find_retailers_by_product(
 
         product_display = PRODUCT_DISPLAY_NAMES.get(normalized, product)
 
-        # Query all retailers
-        results = await _vector_store.find_by_form_type("retailer", limit=500)
+        # Query all retailers (use 800 to cover 700+ retailers)
+        results = await _vector_store.find_by_form_type("retailer", limit=800)
 
         # Filter by product
         matching = []
@@ -488,9 +466,9 @@ async def calculate_appliance_roi(
         return json.dumps({"error": f"ROI calculation failed: {str(e)}"}, indent=2)
 
 
-# Export all retailer tools
-RETAILER_TOOLS = [
-    search_climate_voucher_retailers,
+# Export all tools (excluding web_search which is in web_search.py)
+AGENT_TOOLS = [
+    get_user_consumption_info,
     find_retailers_by_product,
     get_energy_rating_info,
     calculate_appliance_roi,

@@ -374,11 +374,11 @@ async def agentic_rag_search(request: AgenticRAGRequest):
 
 @app.get("/rag/tools")
 async def list_rag_tools():
-    """List available retailer RAG tools and web search tools."""
-    from tools.retailer_tools import RETAILER_TOOLS
+    """List available agent tools and web search tools."""
+    from tools.retailer_tools import AGENT_TOOLS
     from tools.web_search import APPLIANCE_SEARCH_TOOLS
 
-    all_tools = list(RETAILER_TOOLS) + list(APPLIANCE_SEARCH_TOOLS)
+    all_tools = list(AGENT_TOOLS) + list(APPLIANCE_SEARCH_TOOLS)
     tools_info = []
     for tool in all_tools:
         tools_info.append({
@@ -900,10 +900,9 @@ async def load_retailers_from_pdf(file: UploadFile = File(...)):
 @app.post("/retailers/search")
 async def search_retailers(request: RetailerSearchRequest):
     """
-    Search for Climate Voucher participating retailers.
+    Search for Climate Voucher participating retailers by product.
 
-    Use natural language to find retailers where you can spend your
-    Singapore Climate Vouchers on energy-efficient appliances.
+    Uses find_retailers_by_product tool to search through 700+ retailers.
     """
     # Ensure retailer tools are initialized
     await init_retailer_tools()
@@ -915,14 +914,12 @@ async def search_retailers(request: RetailerSearchRequest):
         )
 
     try:
-        from tools.retailer_tools import search_climate_voucher_retailers
+        from tools.retailer_tools import find_retailers_by_product as find_retailers_tool
         import json
 
-        # Call the tool
-        result = await search_climate_voucher_retailers.ainvoke({
-            "query": request.query,
-            "product_category": request.product_category,
-            "planning_area": request.planning_area,
+        # Use find_retailers_by_product with the query as product
+        result = await find_retailers_tool.ainvoke({
+            "product": request.query,
             "limit": request.limit
         })
 
@@ -935,7 +932,7 @@ async def search_retailers(request: RetailerSearchRequest):
 
 
 @app.get("/retailers/products/{product}")
-async def find_retailers_by_product(product: str, limit: int = 15):
+async def find_retailers_by_product(product: str, limit: int = 800):
     """
     Find all retailers selling a specific Climate Voucher eligible product.
 
@@ -998,11 +995,11 @@ async def get_energy_rating_info(product_type: str):
 
 @app.get("/retailers/tools")
 async def list_retailer_tools():
-    """List available Climate Voucher retailer tools."""
-    from tools.retailer_tools import RETAILER_TOOLS
+    """List available agent tools."""
+    from tools.retailer_tools import AGENT_TOOLS
 
     tools_info = []
-    for tool in RETAILER_TOOLS:
+    for tool in AGENT_TOOLS:
         tools_info.append({
             "name": tool.name,
             "description": tool.description,
