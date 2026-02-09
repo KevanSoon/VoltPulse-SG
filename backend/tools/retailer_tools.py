@@ -8,12 +8,19 @@ Provides agentic tools for:
 """
 
 import json
+import os
 from typing import Optional, List, Dict, Any
 from langchain_core.tools import tool
+
+# Import RRF scorer
+from recommender.rrf_scorer import RRFScorer, ScoredRetailer
 
 # Global references - set at initialization
 _encoder = None
 _vector_store = None
+
+# A/B testing flag
+USE_RRF = os.getenv("USE_RRF", "true").lower() == "true"
 
 
 def set_retailer_dependencies(encoder, vector_store):
@@ -90,8 +97,19 @@ def _normalize_product_category(query: str) -> Optional[str]:
     return None
 
 
-def _format_retailer_results(results: List[Any]) -> str:
-    """Format retailer search results for agent consumption."""
+def _format_retailer_results(
+    results: List[Any],
+    rrf_scores: Optional[List[ScoredRetailer]] = None
+) -> str:
+    """Format retailer search results for agent consumption.
+
+    Args:
+        results: List of SimilarityResult objects
+        rrf_scores: Optional list of ScoredRetailer with RRF component scores
+
+    Returns:
+        JSON string with retailer details and scores
+    """
     if not results:
         return "No retailers found matching your criteria."
 
@@ -112,8 +130,22 @@ def _format_retailer_results(results: List[Any]) -> str:
             "website": form_data.get("website"),
             "eligible_products": products_display,
             "remarks": form_data.get("remarks"),
-            "similarity_score": round(result.score, 4),
+            "similarity_score": round(result.score, 4),  # Keep for backward compatibility
         }
+
+        # Add RRF component scores if available
+        if rrf_scores:
+            rrf_entry = next((r for r in rrf_scores if r.retailer.id == result.id), None)
+            if rrf_entry:
+                entry["rrf_scores"] = {
+                    "semantic": round(rrf_entry.semantic_score, 4),
+                    "product": round(rrf_entry.product_score, 4),
+                    "location": round(rrf_entry.location_score, 4),
+                    "breadth": round(rrf_entry.breadth_score, 4),
+                    "intent": round(rrf_entry.intent_score, 4),
+                    "final": round(rrf_entry.final_rrf_score, 4)
+                }
+
         formatted.append(entry)
 
     return json.dumps(formatted, indent=2, ensure_ascii=False)
@@ -177,36 +209,61 @@ async def search_climate_voucher_retailers(
         # Encode query
         embedding = await _encoder.encode(enhanced_query)
 
-        # Search retailer form type
-        results = await _vector_store.find_similar(
-            query_embedding=embedding,
-            form_type="retailer",
-            limit=min(limit * 2, 30),  # Get extra to filter
-        )
+        if USE_RRF:
+            # NEW: RRF-based ranking with multi-signal fusion
+            # Fetch more candidates for better RRF coverage
+            candidates = await _vector_store.find_similar(
+                query_embedding=embedding,
+                form_type="retailer",
+                limit=50,  # Increased for RRF
+            )
 
-        # Post-filter by product and area
-        filtered_results = []
-        for result in results:
-            form_data = result.form_data or {}
+            # Apply RRF scoring
+            scorer = RRFScorer()
+            scored_results = await scorer.score_retailers(
+                query_embedding=embedding,
+                query_text=enhanced_query,
+                candidates=candidates,
+                query_product=normalized_product,
+                query_area=planning_area,
+                limit=limit
+            )
 
-            # Product filter
-            if normalized_product:
-                products = form_data.get("eligible_products", [])
-                if normalized_product not in products:
-                    continue
+            # Convert ScoredRetailer to SimilarityResult for backward compatibility
+            final_results = [r.retailer for r in scored_results]
+            return _format_retailer_results(final_results, rrf_scores=scored_results)
 
-            # Planning area filter
-            if planning_area:
-                retailer_area = form_data.get("planning_area", "").lower()
-                if planning_area.lower() not in retailer_area:
-                    continue
+        else:
+            # OLD: Post-filtering approach (fallback)
+            results = await _vector_store.find_similar(
+                query_embedding=embedding,
+                form_type="retailer",
+                limit=min(limit * 2, 30),
+            )
 
-            filtered_results.append(result)
+            # Post-filter by product and area
+            filtered_results = []
+            for result in results:
+                form_data = result.form_data or {}
 
-            if len(filtered_results) >= limit:
-                break
+                # Product filter
+                if normalized_product:
+                    products = form_data.get("eligible_products", [])
+                    if normalized_product not in products:
+                        continue
 
-        return _format_retailer_results(filtered_results)
+                # Planning area filter
+                if planning_area:
+                    retailer_area = form_data.get("planning_area", "").lower()
+                    if planning_area.lower() not in retailer_area:
+                        continue
+
+                filtered_results.append(result)
+
+                if len(filtered_results) >= limit:
+                    break
+
+            return _format_retailer_results(filtered_results)
 
     except Exception as e:
         return f"Search error: {str(e)}"

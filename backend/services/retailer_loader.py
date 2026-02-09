@@ -56,6 +56,30 @@ class ClimateVoucherRetailer:
     planning_area: Optional[str] = None
     district: Optional[str] = None
 
+    @property
+    def breadth_score(self) -> float:
+        """
+        Pre-computed breadth score for RRF ranking.
+
+        Returns:
+            Float 0-1.5: product breadth (0-1) + website bonus (0.5)
+        """
+        product_score = len(self.eligible_products) / 10.0  # Max 10 products
+        website_score = 0.5 if self.website and self.website != "Not available" else 0.0
+        return product_score + website_score
+
+    @property
+    def postal_prefix(self) -> Optional[str]:
+        """
+        Get first 2 digits of postal code (Singapore district).
+
+        Returns:
+            Two-digit district code or None
+        """
+        if self.postal_code and len(self.postal_code) >= 2:
+            return self.postal_code[:2]
+        return None
+
     def to_embedding_text(self) -> str:
         """Generate text for SeaLion embedding."""
         products_str = ", ".join(self.eligible_products)
