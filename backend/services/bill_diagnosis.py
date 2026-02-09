@@ -85,7 +85,8 @@ class BillDiagnosisService:
 
             elec_efficiency = self._check_efficiency(
                 current_value=extraction.consumption_kwh,
-                national_avg=elec_trend.national_average if elec_trend else NATIONAL_AVERAGES["electricity"],
+                national_avg=(elec_trend.national_average if elec_trend and elec_trend.national_average is not None
+                             else NATIONAL_AVERAGES["electricity"]),
                 neighbour_avg=elec_trend.neighbour_average if elec_trend else None,
                 utility_type="electricity",
                 rate=ELECTRICITY_RATE_SGD
@@ -105,7 +106,8 @@ class BillDiagnosisService:
 
             gas_efficiency = self._check_efficiency(
                 current_value=extraction.gas_usage_kwh,
-                national_avg=gas_trend.national_average if gas_trend else NATIONAL_AVERAGES["gas"],
+                national_avg=(gas_trend.national_average if gas_trend and gas_trend.national_average is not None
+                             else NATIONAL_AVERAGES["gas"]),
                 neighbour_avg=gas_trend.neighbour_average if gas_trend else None,
                 utility_type="gas",
                 rate=GAS_RATE_SGD
@@ -125,7 +127,8 @@ class BillDiagnosisService:
 
             water_efficiency = self._check_efficiency(
                 current_value=extraction.water_usage_cu_m,
-                national_avg=water_trend.national_average if water_trend else NATIONAL_AVERAGES["water"],
+                national_avg=(water_trend.national_average if water_trend and water_trend.national_average is not None
+                             else NATIONAL_AVERAGES["water"]),
                 neighbour_avg=water_trend.neighbour_average if water_trend else None,
                 utility_type="water",
                 rate=WATER_RATE_SGD
@@ -258,13 +261,13 @@ class BillDiagnosisService:
     def _check_efficiency(
         self,
         current_value: float,
-        national_avg: float,
+        national_avg: Optional[float],
         neighbour_avg: Optional[float],
         utility_type: str,
         rate: float
     ) -> Optional[EfficiencyIssue]:
         """Check efficiency compared to national and neighbour averages."""
-        if national_avg <= 0:
+        if national_avg is None or national_avg <= 0:
             return None
 
         deviation_percent = ((current_value - national_avg) / national_avg) * 100
