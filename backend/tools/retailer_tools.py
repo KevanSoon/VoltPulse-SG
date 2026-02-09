@@ -15,6 +15,7 @@ from langchain_core.tools import tool
 
 # Import RRF scorer
 from recommender.rrf_scorer import RRFScorer, ScoredRetailer
+from recommender.planning_areas import PLANNING_AREA_NEIGHBORS
 
 # Global references - set at initialization
 _encoder = None
@@ -250,6 +251,7 @@ async def get_user_consumption_info(query: str) -> str:
 @tool
 async def find_retailers_by_product(
     product: str,
+    location: str = "",
     limit: int = 800
 ) -> str:
     """Find all retailers selling a specific Climate Voucher eligible product.
@@ -261,12 +263,17 @@ async def find_retailers_by_product(
         product: The product type to search for.
                 Examples: "refrigerator", "aircon", "LED light", "washing machine",
                          "water heater", "fan", "toilet", "tap"
+        location: Optional location / area name the user mentioned.
+                  Examples: "Bukit Panjang", "Bedok", "Tampines", "Jurong East"
+                  When provided, retailers whose address or name contains
+                  this area (or a neighbouring area) are ranked first.
         limit: Maximum number of retailers to return (default: 800)
 
     Returns:
-        JSON list of retailers selling the specified product, with full details
+        JSON list of retailers selling the specified product, with full details.
+        When a location is given, results are sorted with nearby retailers first.
     """
-    print(f"[Retailer RAG] find_retailers_by_product - product: '{product}'")
+    print(f"[Retailer RAG] find_retailers_by_product - product: '{product}', location: '{location}'")
 
     if _vector_store is None:
         return "Error: Retailer tools not initialized."
@@ -291,19 +298,58 @@ async def find_retailers_by_product(
             if normalized in products:
                 matching.append(result)
 
-        # Sort by planning area for organization
-        matching.sort(key=lambda r: r.form_data.get("planning_area", "ZZZ"))
+        # ------------------------------------------------------------------
+        # Location scoring – uses ONLY address and retailer_name text fields
+        # Completely ignores the planning_area metadata field.
+        # ------------------------------------------------------------------
+        if location and location.strip():
+            location_clean = location.strip()
+
+            # Build search terms: the area itself + its neighbours
+            search_areas = [location_clean]
+            neighbours = PLANNING_AREA_NEIGHBORS.get(location_clean, [])
+            search_areas_lower = [a.lower() for a in search_areas]
+            neighbours_lower = [n.lower() for n in neighbours]
+
+            def _matches_location(result) -> bool:
+                """Check if area name appears in combined retailer_name + address."""
+                form_data = result.form_data or {}
+                text = (
+                    (form_data.get("retail_outlet", "") or "") + " " +
+                    (form_data.get("outlet_address", "") or "")
+                ).lower()
+                return any(term in text for term in search_areas_lower)
+
+            # Only keep retailers whose name or address contains the area
+            exact_hits = [r for r in matching if _matches_location(r)]
+
+            if exact_hits:
+                matching = exact_hits
+                location_note = f"Showing {len(matching)} retailers in {location_clean}"
+            else:
+                # No text matches – return all, but note it
+                matching.sort(key=lambda r: (r.form_data or {}).get("outlet_address", "ZZZ"))
+                location_note = (
+                    f"No retailers with '{location_clean}' in their address were found. "
+                    f"Showing all {len(matching)} retailers for {product_display}."
+                )
+        else:
+            # No location requested – alphabetical by address
+            matching.sort(key=lambda r: (r.form_data or {}).get("outlet_address", "ZZZ"))
+            location_note = None
 
         # Return top results
         formatted = _format_retailer_results(matching[:limit])
 
         # Add summary
-        summary = {
+        summary: Dict[str, Any] = {
             "product": product_display,
             "total_retailers_found": len(matching),
             "showing": min(limit, len(matching)),
-            "retailers": json.loads(formatted)
+            "retailers": json.loads(formatted),
         }
+        if location_note:
+            summary["location_note"] = location_note
 
         return json.dumps(summary, indent=2, ensure_ascii=False)
 
