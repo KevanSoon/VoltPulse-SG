@@ -1,37 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
+import type { FeatureCollection } from "geojson";
+import type L from "leaflet";
 
-// Singapore district consumption data (hardcoded for now)
-const SINGAPORE_CONSUMPTION_DATA = [
-  { name: "Raffles Place", lat: 1.2830, lng: 103.8513, consumption: 850, district: "01" },
-  { name: "Tanjong Pagar", lat: 1.2763, lng: 103.8445, consumption: 720, district: "02" },
-  { name: "Queenstown", lat: 1.2942, lng: 103.7861, consumption: 480, district: "03" },
-  { name: "Telok Blangah", lat: 1.2707, lng: 103.8090, consumption: 520, district: "04" },
-  { name: "Pasir Panjang", lat: 1.2763, lng: 103.7689, consumption: 390, district: "05" },
-  { name: "City Hall", lat: 1.2931, lng: 103.8520, consumption: 780, district: "06" },
-  { name: "Beach Road", lat: 1.3012, lng: 103.8637, consumption: 650, district: "07" },
-  { name: "Little India", lat: 1.3066, lng: 103.8518, consumption: 580, district: "08" },
-  { name: "Orchard", lat: 1.3048, lng: 103.8318, consumption: 920, district: "09" },
-  { name: "Tanglin", lat: 1.3058, lng: 103.8140, consumption: 680, district: "10" },
-  { name: "Novena", lat: 1.3205, lng: 103.8439, consumption: 510, district: "11" },
-  { name: "Toa Payoh", lat: 1.3343, lng: 103.8563, consumption: 420, district: "12" },
-  { name: "Macpherson", lat: 1.3284, lng: 103.8899, consumption: 380, district: "13" },
-  { name: "Geylang", lat: 1.3201, lng: 103.8918, consumption: 450, district: "14" },
-  { name: "East Coast", lat: 1.3025, lng: 103.9123, consumption: 620, district: "15" },
-  { name: "Bedok", lat: 1.3236, lng: 103.9273, consumption: 350, district: "16" },
-  { name: "Changi", lat: 1.3644, lng: 103.9915, consumption: 290, district: "17" },
-  { name: "Tampines", lat: 1.3496, lng: 103.9568, consumption: 380, district: "18" },
-  { name: "Serangoon", lat: 1.3554, lng: 103.8679, consumption: 410, district: "19" },
-  { name: "Bishan", lat: 1.3526, lng: 103.8352, consumption: 440, district: "20" },
-  { name: "Clementi", lat: 1.3162, lng: 103.7649, consumption: 360, district: "21" },
-  { name: "Jurong", lat: 1.3329, lng: 103.7436, consumption: 550, district: "22" },
-  { name: "Bukit Batok", lat: 1.3590, lng: 103.7637, consumption: 390, district: "23" },
-  { name: "Woodlands", lat: 1.4382, lng: 103.7890, consumption: 340, district: "25" },
-  { name: "Yishun", lat: 1.4304, lng: 103.8354, consumption: 370, district: "27" },
-  { name: "Seletar", lat: 1.4049, lng: 103.8679, consumption: 280, district: "28" },
-];
+interface PlanningAreaProperties {
+  OBJECTID_1: number;
+  PLN_AREA_N: string;
+  REGION_N: string;
+  TOTAL: number;
+  ONE_TO_TWO_RM: number;
+  THREE_RM: number;
+  FOUR_RM: number;
+  FIVE_RM_EXEC_FLATS: number;
+}
+
+interface SelectedArea {
+  name: string;
+  region: string;
+  total: number;
+  oneToTwoRm: number;
+  threeRm: number;
+  fourRm: number;
+  fiveRmExec: number;
+}
 
 export interface HeatmapDataPoint {
   name: string;
@@ -59,6 +52,11 @@ const TileLayer = dynamic(
   { ssr: false }
 );
 
+const GeoJSONLayer = dynamic(
+  () => import("react-leaflet").then((mod) => mod.GeoJSON),
+  { ssr: false }
+);
+
 const CircleMarker = dynamic(
   () => import("react-leaflet").then((mod) => mod.CircleMarker),
   { ssr: false }
@@ -69,69 +67,232 @@ const Popup = dynamic(
   { ssr: false }
 );
 
+function titleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function getConsumptionColor(consumption: number): string {
+  if (consumption === 0) return "#d1d5db"; // gray-300 for non-residential
+  if (consumption < 300) return "#14b8a6"; // teal-500
+  if (consumption < 350) return "#22c55e"; // green-500
+  if (consumption < 400) return "#eab308"; // yellow-500
+  if (consumption < 450) return "#f97316"; // orange-500
+  return "#ef4444"; // red-500
+}
+
 function HeatmapLegend() {
   return (
     <div className="absolute bottom-4 right-4 bg-white rounded-lg shadow-lg p-3 z-[1000]">
-      <p className="text-xs font-medium text-gray-700 mb-2">Consumption Level</p>
+      <p className="text-xs font-medium text-gray-700 mb-2">
+        Avg Monthly Household Consumption (kWh)
+      </p>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-teal-500"></div>
-          <span className="text-xs text-gray-600">Low (&lt;400 kWh)</span>
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: "#d1d5db" }} />
+          <span className="text-xs text-gray-600">No data</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
-          <span className="text-xs text-gray-600">Medium (400-600 kWh)</span>
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: "#14b8a6" }} />
+          <span className="text-xs text-gray-600">Low (&lt;300 kWh)</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-orange-500"></div>
-          <span className="text-xs text-gray-600">High (600-800 kWh)</span>
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: "#22c55e" }} />
+          <span className="text-xs text-gray-600">Below Avg (300-350 kWh)</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-red-500"></div>
-          <span className="text-xs text-gray-600">Very High (&gt;800 kWh)</span>
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: "#eab308" }} />
+          <span className="text-xs text-gray-600">Average (350-400 kWh)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: "#f97316" }} />
+          <span className="text-xs text-gray-600">Above Avg (400-450 kWh)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: "#ef4444" }} />
+          <span className="text-xs text-gray-600">High (&gt;450 kWh)</span>
         </div>
       </div>
     </div>
   );
 }
 
-function getConsumptionColor(consumption: number): string {
-  if (consumption < 400) return "#14b8a6"; // teal-500
-  if (consumption < 600) return "#eab308"; // yellow-500
-  if (consumption < 800) return "#f97316"; // orange-500
-  return "#ef4444"; // red-500
-}
-
-function getConsumptionRadius(consumption: number): number {
-  // Scale radius based on consumption (min 8, max 25)
-  return Math.min(25, Math.max(8, consumption / 40));
-}
-
 export default function SingaporeHeatmap({ dateRange, fullHeight = false, data }: HeatmapProps) {
   const [mounted, setMounted] = useState(false);
-  const [selectedDistrict, setSelectedDistrict] = useState<HeatmapDataPoint | null>(null);
+  const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
+  const [geoLoading, setGeoLoading] = useState(true);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [selectedArea, setSelectedArea] = useState<SelectedArea | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Use provided data or fall back to hardcoded data
-  const mapData: HeatmapDataPoint[] = data || SINGAPORE_CONSUMPTION_DATA;
+  // Fetch GeoJSON data from data.gov.sg API
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchGeoJSON() {
+      setGeoLoading(true);
+      setGeoError(null);
+
+      try {
+        const datasetId = "d_634194a40f36e5bc11a942ab0164fa9d";
+        const pollUrl =
+          "https://api-open.data.gov.sg/v1/public/api/datasets/" +
+          datasetId +
+          "/poll-download";
+
+        const pollResponse = await fetch(pollUrl);
+        if (!pollResponse.ok) throw new Error("Failed to fetch poll-download data");
+
+        const pollJson = await pollResponse.json();
+        if (pollJson.code !== 0 || !pollJson.data?.url) {
+          throw new Error(pollJson.errMsg || "Invalid poll response");
+        }
+
+        const dataResponse = await fetch(pollJson.data.url);
+        if (!dataResponse.ok) throw new Error("Failed to fetch GeoJSON data");
+
+        const featureCollection = await dataResponse.json();
+
+        if (!cancelled) {
+          setGeoData(featureCollection as FeatureCollection);
+        }
+      } catch (err) {
+        console.error("GeoJSON fetch error:", err);
+        if (!cancelled) {
+          setGeoError("Failed to load planning area data");
+        }
+      } finally {
+        if (!cancelled) {
+          setGeoLoading(false);
+        }
+      }
+    }
+
+    fetchGeoJSON();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const useGeoJSONMode = !data;
+
+  // Compute stats from GeoJSON data
+  const residentialFeatures = geoData
+    ? geoData.features.filter(
+        (f) => (f.properties as PlanningAreaProperties).TOTAL > 0
+      )
+    : [];
+
+  const geoAvg =
+    residentialFeatures.length > 0
+      ? Math.round(
+          residentialFeatures.reduce(
+            (sum, f) => sum + (f.properties as PlanningAreaProperties).TOTAL,
+            0
+          ) / residentialFeatures.length
+        )
+      : 0;
+
+  const geoMaxFeature =
+    residentialFeatures.length > 0
+      ? residentialFeatures.reduce((max, f) =>
+          (f.properties as PlanningAreaProperties).TOTAL >
+          (max.properties as PlanningAreaProperties).TOTAL
+            ? f
+            : max
+        )
+      : null;
+
+  const geoMinFeature =
+    residentialFeatures.length > 0
+      ? residentialFeatures.reduce((min, f) =>
+          (f.properties as PlanningAreaProperties).TOTAL <
+          (min.properties as PlanningAreaProperties).TOTAL
+            ? f
+            : min
+        )
+      : null;
+
+  const geoMax = geoMaxFeature
+    ? (geoMaxFeature.properties as PlanningAreaProperties).TOTAL
+    : 0;
+  const geoMin = geoMinFeature
+    ? (geoMinFeature.properties as PlanningAreaProperties).TOTAL
+    : 0;
+  const geoMaxName = geoMaxFeature
+    ? titleCase((geoMaxFeature.properties as PlanningAreaProperties).PLN_AREA_N)
+    : "";
+  const geoMinName = geoMinFeature
+    ? titleCase((geoMinFeature.properties as PlanningAreaProperties).PLN_AREA_N)
+    : "";
+
+  // Fallback stats for data prop mode
+  const mapData: HeatmapDataPoint[] = data || [];
+  const dataAvg = mapData.length > 0
+    ? Math.round(mapData.reduce((sum, d) => sum + d.consumption, 0) / mapData.length)
+    : 0;
+  const dataMax = mapData.length > 0 ? Math.max(...mapData.map((d) => d.consumption)) : 0;
+  const dataMin = mapData.length > 0 ? Math.min(...mapData.map((d) => d.consumption)) : 0;
+
+  const onEachFeature = useCallback(
+    (feature: GeoJSON.Feature, layer: L.Layer) => {
+      const props = feature.properties as PlanningAreaProperties;
+      const name = props.PLN_AREA_N;
+      const total = props.TOTAL;
+
+      layer.bindTooltip(
+        `<strong>${titleCase(name)}</strong><br/>${
+          total > 0 ? `${total} kWh/month` : "No residential data"
+        }`,
+        { sticky: true }
+      );
+
+      layer.on("click", () => {
+        setSelectedArea({
+          name: titleCase(name),
+          region: titleCase(props.REGION_N),
+          total: props.TOTAL,
+          oneToTwoRm: props.ONE_TO_TWO_RM,
+          threeRm: props.THREE_RM,
+          fourRm: props.FOUR_RM,
+          fiveRmExec: props.FIVE_RM_EXEC_FLATS,
+        });
+      });
+
+      layer.on("mouseover", () => {
+        (layer as L.Path).setStyle({
+          weight: 3,
+          fillOpacity: total > 0 ? 0.8 : 0.3,
+        });
+      });
+      layer.on("mouseout", () => {
+        (layer as L.Path).setStyle({
+          weight: 1,
+          fillOpacity: total > 0 ? 0.6 : 0.15,
+        });
+      });
+    },
+    []
+  );
 
   if (!mounted) {
     return (
-      <div className={`${fullHeight ? "h-full" : "h-[400px]"} bg-gray-100 rounded-lg flex items-center justify-center`}>
+      <div
+        className={`${
+          fullHeight ? "h-full" : "h-[400px]"
+        } bg-gray-100 rounded-lg flex items-center justify-center`}
+      >
         <div className="animate-spin w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full" />
       </div>
     );
   }
-
-  // Calculate stats
-  const avgConsumption = Math.round(
-    mapData.reduce((sum, d) => sum + d.consumption, 0) / mapData.length
-  );
-  const maxConsumption = Math.max(...mapData.map(d => d.consumption));
-  const minConsumption = Math.min(...mapData.map(d => d.consumption));
 
   const mapContent = (
     <>
@@ -153,38 +314,67 @@ export default function SingaporeHeatmap({ dateRange, fullHeight = false, data }
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {mapData.map((location, index) => (
-          <CircleMarker
-            key={`district-${location.district}-${index}`}
-            center={[location.lat, location.lng]}
-            radius={getConsumptionRadius(location.consumption)}
-            pathOptions={{
-              fillColor: getConsumptionColor(location.consumption),
-              fillOpacity: 0.7,
-              color: getConsumptionColor(location.consumption),
-              weight: 2,
+        {/* GeoJSON polygon mode (default) */}
+        {useGeoJSONMode && geoData && (
+          <GeoJSONLayer
+            key="geojson-layer"
+            data={geoData}
+            style={(feature) => {
+              const total =
+                (feature?.properties as PlanningAreaProperties)?.TOTAL ?? 0;
+              return {
+                fillColor: getConsumptionColor(total),
+                fillOpacity: total > 0 ? 0.6 : 0.15,
+                color: "#374151",
+                weight: 1,
+                opacity: 0.8,
+              };
             }}
-            eventHandlers={{
-              click: () => setSelectedDistrict(location),
-            }}
-          >
-            <Popup>
-              <div className="text-sm">
-                <p className="font-semibold text-gray-900">{location.name}</p>
-                <p className="text-gray-600">District {location.district}</p>
-                <p className="text-gray-900 font-medium mt-1">
-                  {location.consumption} kWh/month
-                </p>
-                {location.household_count && (
-                  <p className="text-gray-500 text-xs mt-1">
-                    {location.household_count} households
+            onEachFeature={onEachFeature}
+          />
+        )}
+        {/* CircleMarker mode (when data prop is provided) */}
+        {!useGeoJSONMode &&
+          mapData.map((location, index) => (
+            <CircleMarker
+              key={`district-${location.district}-${index}`}
+              center={[location.lat, location.lng]}
+              radius={Math.min(25, Math.max(8, location.consumption / 40))}
+              pathOptions={{
+                fillColor: getConsumptionColor(location.consumption),
+                fillOpacity: 0.7,
+                color: getConsumptionColor(location.consumption),
+                weight: 2,
+              }}
+            >
+              <Popup>
+                <div className="text-sm">
+                  <p className="font-semibold text-gray-900">{location.name}</p>
+                  <p className="text-gray-600">District {location.district}</p>
+                  <p className="text-gray-900 font-medium mt-1">
+                    {location.consumption} kWh/month
                   </p>
-                )}
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))}
+                </div>
+              </Popup>
+            </CircleMarker>
+          ))}
       </MapContainer>
+
+      {/* Loading overlay */}
+      {useGeoJSONMode && geoLoading && (
+        <div className="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-2 z-[1000] flex items-center gap-2">
+          <div className="animate-spin w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full" />
+          <span className="text-xs text-gray-600">Loading area data...</span>
+        </div>
+      )}
+
+      {/* Error overlay */}
+      {useGeoJSONMode && geoError && (
+        <div className="absolute top-4 left-4 bg-red-50 border border-red-200 rounded-lg p-2 z-[1000]">
+          <span className="text-xs text-red-600">{geoError}</span>
+        </div>
+      )}
+
       <HeatmapLegend />
     </>
   );
@@ -206,54 +396,110 @@ export default function SingaporeHeatmap({ dateRange, fullHeight = false, data }
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-teal-50 rounded-lg p-3 text-center">
-          <p className="text-xs text-gray-500">Lowest</p>
-          <p className="text-lg font-bold text-teal-600">{minConsumption} kWh</p>
-          <p className="text-xs text-gray-500">
-            {mapData.find(d => d.consumption === minConsumption)?.name}
-          </p>
+      {useGeoJSONMode && residentialFeatures.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-teal-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500">Lowest</p>
+            <p className="text-lg font-bold text-teal-600">{geoMin} kWh</p>
+            <p className="text-xs text-gray-500">{geoMinName}</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500">Average</p>
+            <p className="text-lg font-bold text-gray-700">{geoAvg} kWh</p>
+            <p className="text-xs text-gray-500">
+              Across {residentialFeatures.length} areas
+            </p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500">Highest</p>
+            <p className="text-lg font-bold text-red-600">{geoMax} kWh</p>
+            <p className="text-xs text-gray-500">{geoMaxName}</p>
+          </div>
         </div>
-        <div className="bg-gray-50 rounded-lg p-3 text-center">
-          <p className="text-xs text-gray-500">Average</p>
-          <p className="text-lg font-bold text-gray-700">{avgConsumption} kWh</p>
-          <p className="text-xs text-gray-500">Across {mapData.length} districts</p>
-        </div>
-        <div className="bg-red-50 rounded-lg p-3 text-center">
-          <p className="text-xs text-gray-500">Highest</p>
-          <p className="text-lg font-bold text-red-600">{maxConsumption} kWh</p>
-          <p className="text-xs text-gray-500">
-            {mapData.find(d => d.consumption === maxConsumption)?.name}
-          </p>
-        </div>
-      </div>
+      )}
 
-      {/* Selected District Details */}
-      {selectedDistrict && (
+      {!useGeoJSONMode && mapData.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-teal-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500">Lowest</p>
+            <p className="text-lg font-bold text-teal-600">{dataMin} kWh</p>
+            <p className="text-xs text-gray-500">
+              {mapData.find((d) => d.consumption === dataMin)?.name}
+            </p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500">Average</p>
+            <p className="text-lg font-bold text-gray-700">{dataAvg} kWh</p>
+            <p className="text-xs text-gray-500">
+              Across {mapData.length} districts
+            </p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500">Highest</p>
+            <p className="text-lg font-bold text-red-600">{dataMax} kWh</p>
+            <p className="text-xs text-gray-500">
+              {mapData.find((d) => d.consumption === dataMax)?.name}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Selected Area Details (GeoJSON mode) */}
+      {useGeoJSONMode && selectedArea && (
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="font-semibold text-gray-900">{selectedDistrict.name}</h4>
-              <p className="text-sm text-gray-500">District {selectedDistrict.district}</p>
+              <h4 className="font-semibold text-gray-900">{selectedArea.name}</h4>
+              <p className="text-sm text-gray-500">{selectedArea.region}</p>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-900">{selectedDistrict.consumption} kWh</p>
-              <p className="text-sm text-gray-500">Monthly avg</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {selectedArea.total > 0 ? `${selectedArea.total} kWh` : "N/A"}
+              </p>
+              <p className="text-sm text-gray-500">Monthly avg (all types)</p>
             </div>
           </div>
+          {selectedArea.total > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              {selectedArea.oneToTwoRm > 0 && (
+                <div className="bg-gray-50 rounded p-2">
+                  <p className="text-gray-500 text-xs">1-2 Room</p>
+                  <p className="font-medium">{selectedArea.oneToTwoRm} kWh</p>
+                </div>
+              )}
+              {selectedArea.threeRm > 0 && (
+                <div className="bg-gray-50 rounded p-2">
+                  <p className="text-gray-500 text-xs">3 Room</p>
+                  <p className="font-medium">{selectedArea.threeRm} kWh</p>
+                </div>
+              )}
+              {selectedArea.fourRm > 0 && (
+                <div className="bg-gray-50 rounded p-2">
+                  <p className="text-gray-500 text-xs">4 Room</p>
+                  <p className="font-medium">{selectedArea.fourRm} kWh</p>
+                </div>
+              )}
+              {selectedArea.fiveRmExec > 0 && (
+                <div className="bg-gray-50 rounded p-2">
+                  <p className="text-gray-500 text-xs">5 Room / Exec</p>
+                  <p className="font-medium">{selectedArea.fiveRmExec} kWh</p>
+                </div>
+              )}
+            </div>
+          )}
           <div className="mt-3 flex items-center gap-2">
             <div
               className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: getConsumptionColor(selectedDistrict.consumption) }}
+              style={{ backgroundColor: getConsumptionColor(selectedArea.total) }}
             />
             <span className="text-sm text-gray-600">
-              {selectedDistrict.consumption < 400
+              {selectedArea.total === 0
+                ? "Non-residential area"
+                : selectedArea.total < 350
                 ? "Below average consumption"
-                : selectedDistrict.consumption < 600
+                : selectedArea.total < 400
                 ? "Average consumption"
-                : selectedDistrict.consumption < 800
-                ? "Above average consumption"
-                : "High consumption area"}
+                : "Above average consumption"}
             </span>
           </div>
         </div>
