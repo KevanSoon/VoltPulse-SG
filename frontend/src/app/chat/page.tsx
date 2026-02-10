@@ -63,7 +63,7 @@ function ChatContent() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [hasProcessedQuery, setHasProcessedQuery] = useState(false);
+  const hasProcessedQuery = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -139,17 +139,17 @@ function ChatContent() {
     }
   };
 
-  // Handle pre-filled query from URL parameters (e.g., from ROI Calculator)
+  // Handle pre-filled query from URL parameters (e.g., from Appliance Recommendation)
   useEffect(() => {
     const query = searchParams.get("query");
-    if (query && !hasProcessedQuery && messages.length === 0) {
-      setHasProcessedQuery(true);
+    if (query && !hasProcessedQuery.current) {
+      hasProcessedQuery.current = true;
       // Small delay to ensure the component is fully mounted
       setTimeout(() => {
         sendMessageDirect(decodeURIComponent(query));
       }, 100);
     }
-  }, [searchParams, hasProcessedQuery, messages.length]);
+  }, [searchParams]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;

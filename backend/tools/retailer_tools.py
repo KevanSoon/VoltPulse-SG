@@ -446,28 +446,42 @@ async def get_energy_rating_info(product_type: str) -> str:
 @tool
 async def calculate_appliance_roi(
     product_type: str,
-    current_rating: int,
     new_rating: int,
-    product_price: float,
+    current_rating: int = 0,
+    product_price: float = 0,
     apply_voucher: bool = True,
 ) -> str:
     """Calculate ROI for upgrading to an energy-efficient appliance.
 
     Use this tool to help users understand the financial benefits of
     upgrading their appliances using Climate Vouchers.
+    Call this tool immediately when a user asks about ROI or savings — use defaults for any missing info.
 
     Args:
         product_type: Type of appliance (e.g., "aircon", "refrigerator", "washing machine")
-        current_rating: Current appliance tick rating (0-5, use 0 for old/unknown)
         new_rating: New appliance tick rating (1-5)
-        product_price: Price of new appliance in SGD
+        current_rating: Current appliance tick rating (0-5, use 0 if unknown — defaults to 0)
+        product_price: Price of new appliance in SGD (use 0 to auto-estimate from typical market price)
         apply_voucher: Whether to apply $300 Climate Voucher (default: True)
 
     Returns:
         JSON with ROI analysis including annual savings, payback period,
         and long-term benefits
     """
-    print(f"[Retailer RAG] calculate_appliance_roi - {product_type}: {current_rating}-tick → {new_rating}-tick @ ${product_price}")
+    # Auto-estimate price from typical range if not provided
+    price_estimated = False
+    if product_price <= 0:
+        from services.roi_calculator import ENERGY_CONSUMPTION_DATA
+        resolved = PRODUCT_ALIASES.get(product_type.lower(), product_type.lower())
+        product_data = ENERGY_CONSUMPTION_DATA.get(resolved)
+        if product_data:
+            low, high = product_data["typical_price_range"]
+            product_price = (low + high) / 2  # midpoint estimate
+        else:
+            product_price = 1000  # fallback
+        price_estimated = True
+
+    print(f"[Retailer RAG] calculate_appliance_roi - {product_type}: {current_rating}-tick → {new_rating}-tick @ ${product_price}{' (estimated)' if price_estimated else ''}")
 
     try:
         from services.roi_calculator import ROICalculator
@@ -501,8 +515,14 @@ async def calculate_appliance_roi(
                 "annual_roi": f"{result.roi_percent_annual:.1f}%"
             },
             "voucher_eligible": result.is_voucher_eligible,
-            "notes": result.notes
+            "notes": result.notes,
+            "price_estimated": price_estimated
         }
+
+        if price_estimated:
+            output["notes"] = list(output["notes"]) + [
+                f"Price was auto-estimated at ${product_price:.0f} (typical market midpoint). Actual ROI will vary with purchase price."
+            ]
 
         return json.dumps(output, indent=2, ensure_ascii=False)
 

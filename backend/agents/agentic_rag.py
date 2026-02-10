@@ -52,7 +52,11 @@ Example queries: "What is a 4-tick rating?", "Explain energy labels for aircon"
 ### 3. calculate_appliance_roi
 Calculates return on investment for upgrading to energy-efficient appliances.
 Use when users ask about savings, payback period, whether an upgrade is worth it.
-Example queries: "Is upgrading my aircon worth it?", "How much can I save with a 5-tick fridge?"
+IMPORTANT: Call this tool immediately — do NOT ask the user for missing parameters.
+- If current_rating is unknown, use 0 (old/unknown).
+- If product_price is unknown, use 0 and the tool will auto-estimate from typical market prices.
+- Always default apply_voucher to True.
+Example queries: "Is upgrading my aircon worth it?", "How much can I save with a 5-tick fridge?", "Calculate ROI for this refrigerator"
 
 ### 4. search_appliance_recommendations
 Searches the web for specific product recommendations, reviews, and buying guides.
@@ -75,7 +79,9 @@ Example queries: "Where to buy aircon with climate voucher?", "Fridge shops near
 → Call get_energy_rating_info with the product type
 
 **For ROI/savings questions:**
-→ Call calculate_appliance_roi with the appliance details
+→ Call calculate_appliance_roi IMMEDIATELY with whatever details you have
+→ Use current_rating=0 if not specified, product_price=0 to auto-estimate
+→ Do NOT ask the user for missing parameters — use defaults and note assumptions in your response
 
 **For product recommendation questions:**
 → First call find_retailers_by_product to find where to buy
