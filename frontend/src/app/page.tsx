@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Zap, Upload, MessageSquare, TrendingDown, Award, BarChart3, Lightbulb, FileText, ArrowRight } from "lucide-react";
 
-import Chatbot from "./components/ChatbotEnhanced";
 import { Navbar } from "./components/navbar";
 import { Footer } from "./components/footer";
 
@@ -290,7 +289,6 @@ export default function Home() {
       </section>
 
       <Footer />
-      <Chatbot />
     </main>
   );
 }

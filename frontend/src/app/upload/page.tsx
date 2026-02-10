@@ -4,7 +4,6 @@ import { useState, useCallback, useMemo } from "react";
 import { useDropzone, FileRejection } from "react-dropzone";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Chatbot from "../components/ChatbotEnhanced";
 import { Navbar } from "../components/navbar";
 import { Footer } from "../components/footer";
 import { Breadcrumb } from "../components/Breadcrumb";
@@ -402,7 +401,6 @@ export default function Upload() {
             </main>
 
             <Footer />
-            <Chatbot />
         </main>
     );
 }
